@@ -1,17 +1,16 @@
-"""``python -m pipeline.case1`` エントリポイント — per-task MAX BLEND。
+"""``python -m pipeline.case1`` — 既知良好バンドルを再現して提出するベースライン。
 
-2 つの提出バンドル A / B（dir または submission.zip）をタスクごとに採点し、
-correct かつ cheaper な ONNX を選んで ``submission.zip`` を再パッケージする。
+高スコアの公開ノートブック出力（``submission.zip``）を取得・検証し、目標 Public
+Score に到達するまで Kaggle に提出する。新しいモデルは作らない（後処理ケース）。
 
 例::
 
-    uv run python -m pipeline.case1 blend \\
-        --a-dir /path/to/A_bundle \\
-        --b-zip /path/to/B/submission.zip \\
-        --task-dir /kaggle/input/competitions/neurogolf-2026 \\
-        --out data/output/case1/submission
+    # ローカルにある検証済み zip をそのまま提出
+    uv run python -m pipeline.case1 submit \\
+        --local-zip ../data/lake/case1-baseline/submission.zip
 
-元ノートブック ``biohack44/neurogolf-2026-blend-max`` の Cell 6 / 8 / 10 / 12 に対応。
+    # Kaggle から取得 → 検証 → 提出（目標スコアまで）
+    uv run python -m pipeline.case1 submit
 """
 
 from __future__ import annotations
@@ -21,93 +20,158 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from evaluate import SOURCE
-from pipeline.case1.blend import blend as run_blend
-from pipeline.case1.blend import package, print_diff
-from pipeline.case1.bundle import BundleError, resolve_bundle
+from pipeline.case1 import (
+    EXPECTED_BYTES,
+    EXPECTED_SHA256,
+    TARGET_KERNEL,
+    TARGET_PUBLIC_SCORE,
+    ReproduceError,
+    reached,
+    resolve_target,
+    run_until_target,
+)
+from submit import AuthError, ensure_credentials, record
+from submit.kaggle_api import KaggleCLIError
 
 app = typer.Typer(
-    help="NeuroGolf 2026 case1 — per-task MAX BLEND (selection blend)",
+    help="NeuroGolf 2026 case1 — 既知良好バンドルを再現・提出するベースライン",
     no_args_is_help=True,
 )
 console = Console()
 
+DEFAULT_WORK = Path("../data/lake/case1-baseline")
+DEFAULT_OUTPUT_DIR = Path("data/output/submit")
+CASE = "case1"
+
 
 @app.callback()
 def _main() -> None:
-    """case1 のサブコマンド群（``blend`` など）。
-
-    コールバックを置くことで、コマンドが 1 つでも typer がサブコマンド
-    ルーティング（``... blend ...``）を維持する。
-    """
+    """case1 のサブコマンド群（``verify`` / ``submit``）。"""
 
 
-# 元ノートブックの Kaggle 既定パス（ローカルでは --task-dir 等で上書きする）。
-DEFAULT_TASK_DIR = Path("/kaggle/input/competitions/neurogolf-2026")
-DEFAULT_WORK = Path("/kaggle/working")
-DEFAULT_OUT = DEFAULT_WORK / "submission"
-
-
-@app.command("blend")
-def blend_cmd(
-    a_dir: Path | None = typer.Option(
-        None, "--a-dir", help="バンドル A: taskNNN.onnx を含むディレクトリ"
+@app.command("verify")
+def verify_cmd(
+    local_zip: Path = typer.Option(
+        None,
+        "--local-zip",
+        help="検証する submission.zip（省略時は Kaggle から取得）",
     ),
-    a_zip: Path | None = typer.Option(
-        None, "--a-zip", help="バンドル A: submission.zip"
-    ),
-    b_dir: Path | None = typer.Option(
-        None, "--b-dir", help="バンドル B: taskNNN.onnx を含むディレクトリ"
-    ),
-    b_zip: Path | None = typer.Option(
-        None, "--b-zip", help="バンドル B: submission.zip"
-    ),
-    task_dir: Path = typer.Option(
-        DEFAULT_TASK_DIR, "--task-dir", help="競技タスク JSON のディレクトリ"
-    ),
-    out: Path = typer.Option(
-        DEFAULT_OUT, "--out", help="出力 submission.zip のパス（拡張子なし）"
-    ),
-    work: Path = typer.Option(
-        DEFAULT_WORK, "--work", help="zip 展開や stage の作業ディレクトリ"
-    ),
-    show_diff: bool = typer.Option(
-        True, "--diff/--no-diff", help="A/B で勝敗が分かれたタスクを表示する"
-    ),
+    work: Path = typer.Option(DEFAULT_WORK, "--work", help="取得物の作業ディレクトリ"),
 ) -> None:
-    """A / B をタスクごとに blend して submission.zip を生成する。"""
-    console.print("[bold cyan]== NeuroGolf case1: per-task MAX BLEND ==[/]")
-    console.print(f"scoring source: {SOURCE}")
+    """ベースラインバンドルを取得（必要時）し、SHA256 / バイト数を検証する。"""
 
-    work.mkdir(parents=True, exist_ok=True)
+    console.print(f"[dim]target kernel: {TARGET_KERNEL}[/dim]")
+    console.print(
+        f"[dim]expected: {EXPECTED_BYTES:,} bytes  sha256={EXPECTED_SHA256}[/dim]"
+    )
     try:
-        a = resolve_bundle(
-            str(a_dir) if a_dir else None,
-            str(a_zip) if a_zip else None,
-            "A",
-            str(work),
-        )
-        b = resolve_bundle(
-            str(b_dir) if b_dir else None,
-            str(b_zip) if b_zip else None,
-            "B",
-            str(work),
-        )
-    except BundleError as exc:
+        bundle = resolve_target(work, local_zip=local_zip)
+    except ReproduceError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=2) from exc
+    console.print(
+        f"[green]検証 OK[/]: {bundle.zip_path}  "
+        f"{bundle.size_bytes:,} bytes  sha256={bundle.sha256}"
+    )
 
-    stage = str(work / "_stage")
-    summary = run_blend(a, b, str(task_dir), stage)
 
-    if show_diff:
-        console.print("\n[bold]A/B 差分（勝敗が分かれたタスク）[/]")
-        print_diff(summary)
+@app.command("submit")
+def submit_cmd(
+    message: str = typer.Option(
+        "case1 reproduce baseline", "-m", "--message", help="提出メッセージ"
+    ),
+    local_zip: Path = typer.Option(
+        None,
+        "--local-zip",
+        help="提出する submission.zip（省略時は Kaggle から取得）",
+    ),
+    work: Path = typer.Option(DEFAULT_WORK, "--work", help="取得物の作業ディレクトリ"),
+    output_dir: Path = typer.Option(
+        DEFAULT_OUTPUT_DIR, "--output-dir", help="提出履歴の保存先"
+    ),
+    target: float = typer.Option(
+        TARGET_PUBLIC_SCORE, "--target", help="到達目標 Public Score"
+    ),
+    max_attempts: int = typer.Option(
+        3, "--max-attempts", help="目標未達時の最大提出回数"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="検証のみで提出はしない"),
+) -> None:
+    """ベースラインバンドルを検証し、目標 Public Score まで提出する。"""
 
-    out.parent.mkdir(parents=True, exist_ok=True)
-    console.print("\n[bold]submission.zip 生成 + 最終 audit[/]")
-    zip_path = package(stage, str(out), task_dir=str(task_dir))
-    console.print(f"[green]完了: {zip_path}[/]")
+    console.print("[bold cyan]== case1 reproduce baseline 提出フロー ==[/]")
+    console.print(f"target kernel : {TARGET_KERNEL}")
+    console.print(f"target score  : {target}")
+
+    console.print("\n[bold]1) バンドル取得 & 検証[/]")
+    try:
+        bundle = resolve_target(work, local_zip=local_zip)
+    except ReproduceError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=2) from exc
+    console.print(
+        f"  [green]検証 OK[/]: {bundle.zip_path}  {bundle.size_bytes:,} bytes"
+    )
+
+    if dry_run:
+        record(
+            base_dir=output_dir,
+            case=CASE,
+            message=message,
+            archive=bundle.zip_path,
+            dry_run=True,
+            result={"mode": "dry-run", "sha256": bundle.sha256},
+        )
+        console.print("[green]dry-run 完了。提出は行いませんでした。[/]")
+        raise typer.Exit(code=0)
+
+    console.print("\n[bold]2) 認証確認[/]")
+    try:
+        method = ensure_credentials()
+    except AuthError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=4) from exc
+    console.print(f"  認証方式: {method}")
+
+    console.print("\n[bold]3) 目標スコアまで提出[/]")
+    try:
+        outcome = run_until_target(
+            bundle.zip_path, message, target, max_attempts=max_attempts
+        )
+    except KaggleCLIError as exc:
+        console.print(f"[red]提出失敗:[/]\n{exc}")
+        record(
+            base_dir=output_dir,
+            case=CASE,
+            message=message,
+            archive=bundle.zip_path,
+            dry_run=False,
+            result={"error": str(exc)},
+        )
+        raise typer.Exit(code=7) from exc
+
+    console.print(f"  status={outcome.status}  publicScore={outcome.public_score}")
+    ok = reached(outcome.public_score, target)
+    record(
+        base_dir=output_dir,
+        case=CASE,
+        message=message,
+        archive=bundle.zip_path,
+        dry_run=False,
+        result={
+            "status": outcome.status,
+            "public_score": outcome.public_score,
+            "target": target,
+            "reached": ok,
+            "sha256": bundle.sha256,
+        },
+    )
+    if ok:
+        console.print("\n[green]目標スコア到達。提出完了。[/]")
+    else:
+        console.print(
+            "\n[yellow]目標未達（pending の可能性）。Kaggle UI を確認してください。[/]"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover
