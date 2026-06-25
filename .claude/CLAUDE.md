@@ -39,7 +39,7 @@ docs/
 ## Submission
 
 A submission is a **`submission.zip`** containing **at most one ONNX file per task**, named `task001.onnx` … `task400.onnx`. Only solved tasks need be included. Constraints: each `.onnx` ≤ **1.44 MB**; all tensor/parameter shapes statically defined; **disallowed ONNX ops**: `Loop`, `Scan`, `NonZero`, `Unique`, `Script`, `Function`. Build/validate via `uv run python -m submit` (or `dev/submit`): it collects `taskNNN.onnx` from `--onnx-dir`, runs `onnx.checker` + the constraint/cost checks (`src/onnxgolf`, `src/submit/validator.py`), and zips them (`src/submit/packager.py`). 
-Submissions can be made without any verification.
+Submissions can be made up to 100 times a day without verification.
 
 ## Glossary
 
