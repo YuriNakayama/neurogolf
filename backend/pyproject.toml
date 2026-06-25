@@ -21,8 +21,6 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "src/dataset",
-    "src/solvers",
     "src/evaluate",
     "src/submit",
 ]
@@ -91,7 +89,6 @@ max-complexity = 5
 [tool.ruff.lint.per-file-ignores]
 "src/submit/__main__.py" = ["B008"]  # typer は引数デフォルトで Option を呼ぶのが標準
 "pipeline/case1/__main__.py" = ["B008"]  # 同上（typer CLI）
-"pipeline/case0/__main__.py" = ["B008"]  # 同上（typer CLI）
 # Test fixtures often need long inline literals; readability wins over 88-char limit.
 "tests/**/test_*.py" = ["E501"]
 
