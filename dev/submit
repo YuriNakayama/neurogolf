@@ -1,0 +1,42 @@
+#!/bin/bash
+# Kaggle NeuroGolf 2026 への提出自動化ラッパー
+#
+# taskNNN.onnx を収めたディレクトリを検証し、submission.zip を作って提出する。
+#
+# Usage:
+#   dev/submit -m "初回提出"                       # data/output/onnx を提出
+#   dev/submit -m "テスト" --dry-run               # 検証 + zip 生成のみ
+#   dev/submit -m "wait" --wait                    # 提出後に validation をポーリング
+#   dev/submit -m "別ディレクトリ" --onnx-dir path/to/onnx
+#   dev/submit validate                            # 検証だけ（コスト/スコア表示）
+set -euo pipefail
+
+cd "$(dirname "$0")/../backend"
+
+if [ $# -lt 1 ]; then
+  cat <<'EOS'
+Usage: dev/submit -m "<message>" [オプション]
+       dev/submit validate [--onnx-dir DIR]
+
+  -m, --message TEXT   提出メッセージ (submit 時は必須)
+  --onnx-dir DIR       taskNNN.onnx を収めたディレクトリ (既定: data/output/onnx)
+  --output-dir DIR     submission.zip 生成先 (既定: data/output/submit)
+  --dry-run            検証と submission.zip 生成のみ (Kaggle へは投げない)
+  --wait               提出後に validation 結果をポーリング
+
+Examples:
+  dev/submit -m "identity + recolor baseline"
+  dev/submit -m "dry run" --dry-run
+  dev/submit validate --onnx-dir data/output/onnx
+EOS
+  exit 1
+fi
+
+# 第一引数がサブコマンド (validate/submissions) ならそのまま委譲。
+case "${1:-}" in
+  validate | submissions)
+    exec uv run python -m submit "$@"
+    ;;
+esac
+
+exec uv run python -m submit submit "$@"

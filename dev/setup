@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+ROOT_DIR="$(pwd)"
+
+echo "== セットアップ開始 =="
+
+# backend — Python 側の依存
+if [ -d "backend" ]; then
+  echo "[backend] 依存関係をインストール中..."
+  cd backend && uv sync --quiet && cd "$ROOT_DIR"
+  echo "[backend] 完了"
+fi
+
+echo "== セットアップ完了 =="

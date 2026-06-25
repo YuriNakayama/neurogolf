@@ -1,0 +1,77 @@
+name: Submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      onnx_dir:
+        description: "taskNNN.onnx を収めたディレクトリ (backend 相対, 例: data/output/onnx)"
+        required: false
+        type: string
+        default: "data/output/onnx"
+      message:
+        description: "Kaggle 提出メッセージ"
+        required: true
+        type: string
+      dry_run:
+        description: "dry-run (検証と submission.zip 生成のみ; 提出しない)"
+        required: false
+        type: boolean
+        default: false
+      wait:
+        description: "提出後に validation 結果をポーリング"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+        working-directory: backend
+
+      - name: Verify competition access
+        run: uv run kaggle competitions list --group entered
+        working-directory: backend
+
+      - name: Pull ONNX artifacts (DVC, best-effort)
+        working-directory: backend
+        continue-on-error: true
+        run: uv run dvc pull "${{ inputs.onnx_dir }}" || true
+
+      - name: Submit
+        working-directory: backend
+        run: |
+          ARGS=(submit -m "${{ inputs.message }}" --onnx-dir "${{ inputs.onnx_dir }}")
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          if [ "${{ inputs.wait }}" = "true" ]; then
+            ARGS+=(--wait)
+          fi
+          uv run python -m submit "${ARGS[@]}"
+
+      - name: Upload submission log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaggle-submission-log
+          path: backend/data/output/submit/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,99 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# common
+
+## env files (can opt-in for committing if needed)
+.env
+.env.local
+
+log/
+
+## working directory
+docs/works
+
+# frontend
+
+## dependencies
+/frontend/node_modules
+/frontend/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+## testing
+/frontend/coverage
+
+## next.js
+/frontend/.next/
+/frontend/out/
+
+## production
+/frontend/build
+
+## misc
+.DS_Store
+*.pem
+
+## debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+## vercel
+.vercel
+
+## typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# backend
+## python
+**/__pycache__
+*.pyc
+*.log
+backend/.venv
+backend/tests/.pytest_cache
+backend/.ruff_cache
+backend/.coverage
+backend/.coverage.*
+backend/.mypy_cache
+backend/tests/coverage/
+
+*.db
+
+# data — actual contents are DVC-managed (if adopted); only stubs / docs land in git.
+# Includes data/output/ (generated ONNX / submission artifacts).
+# Ignore everything under data/, then re-include directories and stub files.
+# NOTE: directories MUST be re-included (!/data/ and !/data/**/) BEFORE the
+# file negations below — git cannot un-ignore a file inside an ignored dir.
+/data/**
+!/data/
+!/data/**/
+# Re-include stub files only: *.dvc / *.md / .gitkeep / .gitignore
+# (DVC tracking files, docs, empty-dir placeholders, DVC auto-generated ignores)
+!/data/**/*.dvc
+!/data/**/*.md
+!/data/**/.gitkeep
+!/data/**/.gitignore
+
+# DVC
+/.dvc/tmp
+/.dvc/config.local
+/.dvc/cache
+
+# kaggle credentials
+.kaggle/
+kaggle.json
+
+# claude code scheduled tasks (local runtime state)
+.claude/scheduled_tasks.lock
+
+# claude code agent worktrees (per-agent runtime repo copies; never commit)
+.claude/worktrees/
+
+# skill-creator workspaces (per-skill eval outputs / benchmarks; reproducible)
+.claude/skills/*-workspace/

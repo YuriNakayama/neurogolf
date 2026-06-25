@@ -1,0 +1,26 @@
+#!/bin/bash
+# backend テスト（ci.yml 相当）
+# format check → lint → type check → pytest
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ "${CI:-}" = "true" ]; then
+  RUFF_FORMAT="--output-format=github"
+else
+  RUFF_FORMAT=""
+fi
+
+cd "$ROOT_DIR/backend"
+
+echo "== backend: format check =="
+uv run ruff format --check .
+
+echo "== backend: lint =="
+uv run ruff check $RUFF_FORMAT .
+
+echo "== backend: type check =="
+uv run mypy --config-file pyproject.toml .
+
+echo "== backend: test =="
+uv run pytest tests -m "not slow" "$@"

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci.yml"
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache uv / mypy / ruff
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.local/share/uv
+            .mypy_cache
+            .pytest_cache
+            .ruff_cache
+          key: ${{ runner.os }}-backend-tools-${{ hashFiles('backend/uv.lock', 'backend/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-tools-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install backend deps (uv sync)
+        run: uv sync --locked --dev
+        working-directory: backend
+
+      - name: Ruff format check (backend)
+        run: uv run ruff format --check .
+        working-directory: backend
+
+      - name: Ruff lint (backend)
+        run: uv run ruff check --output-format=github .
+        working-directory: backend
+
+      - name: MyPy type check (backend)
+        run: uv run mypy --config-file pyproject.toml .
+        working-directory: backend
+
+      # `-n auto` で pytest-xdist による並列化 (GH Actions ubuntu-latest は
+      # 2 vCPU)、`--no-cov` で coverage 計算を省略 (CI では shape pass を
+      # 見るだけで十分)。`-m "not slow"` で重い test を除外。
+      - name: Pytest (backend, parallel)
+        run: |
+          uv run pytest tests -m "not slow" -n auto --no-cov
+        working-directory: backend
