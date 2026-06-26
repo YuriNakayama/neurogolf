@@ -3,7 +3,8 @@
 # 定義する。値そのものは Terraform 管理対象外（コミット禁止）で、apply 後に
 # 手動投入する（infra/README.md 参照）。
 #
-#   ANTHROPIC_API_KEY  : Claude Code CLI の課金キー
+#   CLAUDE_CODE_OAUTH_TOKEN : Claude Code のサブスク由来 OAuth トークン
+#                             （`claude setup-token` で 1 度だけ手動生成、1 年有効）
 #   KAGGLE_USERNAME    : Kaggle 提出
 #   KAGGLE_KEY         : Kaggle 提出
 #   GH_TOKEN           : セルフマージ用 GitHub トークン（repo / PR スコープ）
@@ -14,7 +15,7 @@
 
 locals {
   secret_keys = [
-    "ANTHROPIC_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
     "KAGGLE_USERNAME",
     "KAGGLE_KEY",
     "GH_TOKEN",

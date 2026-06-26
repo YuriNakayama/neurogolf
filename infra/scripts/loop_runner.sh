@@ -39,8 +39,8 @@ run_claude() {
     log_error "prompt file not found: ${prompt_file}"
     return 1
   fi
-  if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-    log_error "ANTHROPIC_API_KEY missing; cannot run claude"
+  if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+    log_error "CLAUDE_CODE_OAUTH_TOKEN missing; cannot run claude"
     return 1
   fi
   log_info "claude[${label}] start (timeout=${timeout_s}s, max-turns=${CLAUDE_MAX_TURNS})"

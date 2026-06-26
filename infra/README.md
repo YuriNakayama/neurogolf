@@ -71,18 +71,26 @@ terraform init \
 
 ### 3. シークレットを SSM に投入（値は手動・コミット厳禁）
 
-`ssm_secrets` モジュールが箱（SecureString, 値はプレースホルダ）を作る。apply 後に実値を投入する:
+`ssm_secrets` モジュールが箱（SecureString, 値はプレースホルダ）を作る。apply 後に実値を投入する。
+
+**Claude 認証はサブスクリプション（API キーではない）**。`claude setup-token` を**ローカルで 1 度だけ手動実行**してブラウザ認証し、表示される 1 年有効の `CLAUDE_CODE_OAUTH_TOKEN` を SSM に入れる。ECS は以後この トークンで無人実行する（`entrypoint.sh` が `ANTHROPIC_API_KEY` を unset し OAuth トークンを優先）。
+
+> ⚠️ サブスクの無人/自動利用は Anthropic の ToS に抵触する懸念があります。リスクを理解の上で運用してください。
 
 ```bash
+# 0) ローカルで 1 度だけ（ブラウザでサブスク認証 → トークンが表示される）
+claude setup-token
+
 NAME=neurogolf
-aws ssm put-parameter --overwrite --type SecureString \
-  --name "/$NAME/ANTHROPIC_API_KEY" --value "sk-ant-..."
+# 1) 表示された OAuth トークンを投入（値はコマンド履歴に残さないよう read -rs 推奨）
+read -rs OAUTH && aws ssm put-parameter --overwrite --type SecureString \
+  --name "/$NAME/CLAUDE_CODE_OAUTH_TOKEN" --value "$OAUTH" && unset OAUTH
 aws ssm put-parameter --overwrite --type SecureString \
   --name "/$NAME/KAGGLE_USERNAME" --value "<kaggle user>"
 aws ssm put-parameter --overwrite --type SecureString \
   --name "/$NAME/KAGGLE_KEY" --value "<kaggle key>"
-aws ssm put-parameter --overwrite --type SecureString \
-  --name "/$NAME/GH_TOKEN" --value "<github PAT: repo + PR 権限>"
+read -rs GHT && aws ssm put-parameter --overwrite --type SecureString \
+  --name "/$NAME/GH_TOKEN" --value "$GHT" && unset GHT   # fine-grained PAT 推奨
 ```
 
 > `ssm_secrets` は `ignore_changes = [value]` のため、以後の `terraform apply` がこの実値を上書きしない。

@@ -37,15 +37,16 @@ log_init() {
 mask_secrets() {
   local line="$1"
   local key
-  for key in ANTHROPIC_API_KEY KAGGLE_KEY GH_TOKEN KAGGLE_USERNAME; do
+  for key in CLAUDE_CODE_OAUTH_TOKEN KAGGLE_KEY GH_TOKEN KAGGLE_USERNAME; do
     local val="${!key:-}"
     if [[ -n "${val}" ]]; then
       line="${line//${val}/***${key}***}"
     fi
   done
-  # トークン形状のフォールバック（Anthropic / GitHub PAT）。
+  # トークン形状のフォールバック（Anthropic API キー / OAuth トークン / GitHub PAT）。
+  # sk-ant-* は API キー(sk-ant-api...)・OAuth トークン(sk-ant-oat...)双方を含む。
   line="$(printf '%s' "${line}" | sed -E \
-    -e 's/sk-ant-[A-Za-z0-9_-]+/***ANTHROPIC_KEY***/g' \
+    -e 's/sk-ant-[A-Za-z0-9_-]+/***ANTHROPIC_TOKEN***/g' \
     -e 's/gh[pousr]_[A-Za-z0-9]+/***GH_TOKEN***/g' \
     -e 's/github_pat_[A-Za-z0-9_]+/***GH_TOKEN***/g')"
   printf '%s' "${line}"

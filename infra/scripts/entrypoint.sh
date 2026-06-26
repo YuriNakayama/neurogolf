@@ -46,9 +46,12 @@ resolve_secret() {
 }
 
 init_secrets() {
-  for key in ANTHROPIC_API_KEY KAGGLE_USERNAME KAGGLE_KEY GH_TOKEN; do
+  for key in CLAUDE_CODE_OAUTH_TOKEN KAGGLE_USERNAME KAGGLE_KEY GH_TOKEN; do
     resolve_secret "${key}"
   done
+  # サブスク OAuth トークンを使うため、万一 API キーが環境に紛れ込んでいても
+  # 優先順位で勝たないよう明示的に除去する（API キー > OAuth トークンのため）。
+  unset ANTHROPIC_API_KEY 2>/dev/null || true
 }
 
 # --- git / gh の初期化 ------------------------------------------------------
