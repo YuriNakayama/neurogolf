@@ -110,6 +110,19 @@ cd infra/envs/prod
 terraform apply -var="image_tag=$TAG"
 ```
 
+これで DVC remote バケット `neurogolf-dvc-<account_id>` も作成される（`terraform output dvc_remote_url` で確認）。`.dvc/config` の URL と一致していること。
+
+### 6. 初回の ONNX を DVC remote へ push（データ受け渡しの起点）
+
+submit タスクは `dvc pull` で ONNX を取得する。空だと毎回「提出物なし」で空振りするため、手元の検証済み ONNX を一度 push しておく:
+
+```bash
+# repo root で（~/.aws 認証）
+uv --project backend run dvc push
+```
+
+以後はループが各サイクルで `dvc add`+`dvc push` し、submit が `dvc pull` する。**認証**: ローカルは `~/.aws`、ECS は task role の IAM を `dvc[s3]` が自動使用（キー注入不要）。
+
 ## 段階導入（推奨）
 
 1. **submit だけ先に稼働**: `terraform apply` 後、EventBridge Scheduler が 15 分毎に submit を起動。`logs/<date>/submit/` と Kaggle 提出履歴で動作確認。

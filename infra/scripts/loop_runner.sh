@@ -15,8 +15,10 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-readonly REPO_DIR="/app"
-readonly LOOP_DIR="${REPO_DIR}/loop"
+# 作業ツリーは entrypoint が clone した WORK_DIR。スクリプト群はイメージ側の
+# /app/loop/ に固定。
+readonly REPO_DIR="${WORK_DIR:-/work/neurogolf}"
+readonly LOOP_DIR="/app/loop"
 readonly PROMPTS_DIR="${LOOP_DIR}/prompts"
 readonly GITHUB_REPO="${GITHUB_REPO:-YuriNakayama/neurogolf}"
 readonly BRANCH_INTERVAL="${BRANCH_INTERVAL_SECONDS:-10800}"
@@ -54,6 +56,26 @@ run_claude() {
   log_info "claude[${label}] done rc=${rc}"
   log_sync
   return "${rc}"
+}
+
+# --- DVC: 生成 ONNX を remote へ push し、ポインタを更新 --------------------
+# 実装フェーズで data/output/onnx が更新され得る。DVC は repo root で動かす。
+#   1. dvc add で onnx.dvc ポインタを最新化
+#   2. dvc push で実ファイルを remote(S3) へアップロード
+# ポインタ（onnx.dvc）は git 追跡対象なので、この後の git add -A で PR に乗る。
+# 失敗してもサイクルは継続（CI とポインタ整合は後続で担保）。
+dvc_sync_onnx() {
+  local onnx_path="data/output/onnx"
+  if [[ ! -d "${REPO_DIR}/${onnx_path}" ]]; then
+    log_info "no ${onnx_path}; skip dvc sync"
+    return 0
+  fi
+  run_logged bash -c "cd '${REPO_DIR}' && uv --project backend run dvc add '${onnx_path}'"
+  if run_logged bash -c "cd '${REPO_DIR}' && uv --project backend run dvc push '${onnx_path}'"; then
+    log_info "dvc push ok"
+  else
+    log_warn "dvc push failed; ONNX may not reach submit task this cycle"
+  fi
 }
 
 # --- ローカル検証（CI を待つ前の早期失敗検出） ------------------------------
@@ -119,8 +141,15 @@ run_cycle() {
   run_logged git -C "${REPO_DIR}" checkout -B main origin/main
   run_logged git -C "${REPO_DIR}" checkout -b "${branch}"
 
+  # 直近 ONNX を remote から取得（ポインタ整合 + 実装の基準を最新化）。
+  run_logged bash -c "cd '${REPO_DIR}' && uv --project backend run dvc pull || true"
+
   # 実装フェーズ
   run_claude "implement" "${PROMPTS_DIR}/implement.prompt" "${CLAUDE_IMPL_TIMEOUT}" "${REPO_DIR}"
+
+  # 生成 ONNX を remote へ push しポインタ(onnx.dvc)を更新。
+  # ONNX 自体は git 無視のため、変更検知はこのポインタ差分で行う。
+  dvc_sync_onnx
 
   # 変更が無ければサイクル終了（空 PR を作らない）
   if git -C "${REPO_DIR}" diff --quiet && git -C "${REPO_DIR}" diff --cached --quiet; then

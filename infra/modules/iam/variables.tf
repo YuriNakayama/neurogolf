@@ -27,3 +27,8 @@ variable "secret_arns" {
   description = "タスクが読む SSM パラメータ ARN 一覧"
   type        = list(string)
 }
+
+variable "dvc_bucket_arn" {
+  description = "DVC remote バケット ARN（task role の dvc push/pull 用）"
+  type        = string
+}

@@ -23,6 +23,16 @@ output "log_bucket" {
   value       = module.s3_logs.bucket_name
 }
 
+output "dvc_bucket" {
+  description = "DVC remote バケット"
+  value       = module.dvc_remote.bucket_name
+}
+
+output "dvc_remote_url" {
+  description = ".dvc/config に設定する remote URL"
+  value       = module.dvc_remote.remote_url
+}
+
 output "ssm_parameter_names" {
   description = "値を手動投入する必要がある SSM パラメータ名"
   value       = module.ssm_secrets.parameter_names

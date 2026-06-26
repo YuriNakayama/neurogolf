@@ -11,18 +11,25 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-readonly BACKEND_DIR="/app/backend"
+readonly REPO_DIR="${WORK_DIR:-/work/neurogolf}"
+readonly BACKEND_DIR="${REPO_DIR}/backend"
+# ONNX_DIR は backend 相対（python -m submit が backend で動くため）。
 readonly ONNX_DIR="${ONNX_DIR:-data/output/onnx}"
+# DVC は repo root（/app）に init 済み。pull 対象は root 相対パス。
+readonly DVC_TARGET="data/output/onnx"
 readonly FINGERPRINT_S3="s3://${LOG_BUCKET:-}/state/submit/last_fingerprint.txt"
 
 cd "${BACKEND_DIR}" || exit 1
 
-# --- 1) 最新 ONNX 取得（best-effort） --------------------------------------
+# --- 1) 最新 ONNX を DVC remote から取得 ------------------------------------
+# DVC は repo root で動かす（.dvc/ が /app にある）。dvc[s3] は task role の
+# IAM 認証を boto3 経由で自動使用するため、明示のキー注入は不要。
 fetch_onnx() {
-  if uv run dvc pull "${ONNX_DIR}" >/dev/null 2>&1; then
-    log_info "dvc pull ${ONNX_DIR} ok"
+  if (cd "${REPO_DIR}" && uv --project "${BACKEND_DIR}" run dvc pull "${DVC_TARGET}") \
+      >/dev/null 2>&1; then
+    log_info "dvc pull ${DVC_TARGET} ok"
   else
-    log_warn "dvc pull failed or no dvc tracking; using existing ${ONNX_DIR}"
+    log_warn "dvc pull failed; using existing ${ONNX_DIR} if any"
   fi
 }
 

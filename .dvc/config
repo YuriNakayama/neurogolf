@@ -1,0 +1,6 @@
+[core]
+    remote = storage
+    analytics = false
+['remote "storage"']
+    url = s3://neurogolf-dvc-286854171013/remote
+    region = ap-northeast-1

@@ -65,6 +65,12 @@ module "s3_logs" {
   bucket_name = local.infra_bucket
 }
 
+module "dvc_remote" {
+  source = "../../modules/dvc_remote"
+
+  account_id = local.account_id
+}
+
 module "ssm_secrets" {
   source = "../../modules/ssm_secrets"
 
@@ -80,6 +86,7 @@ module "iam" {
   log_bucket_arn = module.s3_logs.bucket_arn
   log_prefix     = var.log_prefix
   secret_arns    = module.ssm_secrets.parameter_arns
+  dvc_bucket_arn = module.dvc_remote.bucket_arn
 }
 
 module "ecs_loop" {

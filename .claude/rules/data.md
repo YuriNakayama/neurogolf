@@ -40,11 +40,12 @@ data/
 
 ## DVC management
 
-> ⚠️ NeuroGolf で DVC を使うか自体が未確定（オフライン ONNX golf 中心のため不要かもしれない）。下記は DVC を採用する場合の方針で、`.dvc/` 初期化・S3 バケットはまだ存在しない。詳細は [`docs/develop/MIGRATION.md`](../../docs/develop/MIGRATION.md)。
+> ✅ DVC を**正式採用**。`.dvc/` 初期化済み、S3 remote は Terraform（`infra/modules/dvc_remote`）が管理する専用バケット。ECS の自律ループ（生成 ONNX を `dvc push`）と submit タスク（`dvc pull`）の受け渡し経路でもある。詳細は [`infra/README.md`](../../infra/README.md)。
 
-- 採用する場合: lake / mart / output 配下を `dvc add` でディレクトリ単位に track し、生成された `*.dvc` のみ git commit
-- S3 remote（プレースホルダ）: `s3://neurogolf-dvc-000000000000/remote`（実バケット未作成）
-- 実データ取得は `dev/dvc pull`（DVC 採用時に `dev/dvc` を復活させる）
+- lake / mart / output 配下を `dvc add` でディレクトリ単位に track し、生成された `*.dvc` のみ git commit（実体は git 無視）
+- S3 remote（default `storage`）: `s3://neurogolf-dvc-<account_id>/remote`（バケットは Terraform で作成、`.dvc/config` の URL と一致）
+- 認証: ローカルは `~/.aws` プロファイル、ECS は **task role の IAM**（`dvc[s3]` が boto3 経由で自動使用）
+- 取得/送信: repo root で `uv --project backend run dvc pull` / `dvc push`
 
 ## .gitignore behavior
 

@@ -96,6 +96,40 @@ data "aws_iam_policy_document" "task" {
     resources = ["${var.log_bucket_arn}/state/submit/*"]
   }
 
+  # DVC remote: loop が ONNX を push、submit が pull する。
+  # DVC は content-addressed のため Get/Put/List/Delete を要する（gc 含む）。
+  statement {
+    sid       = "DvcBucketList"
+    actions   = ["s3:ListBucket"]
+    resources = [var.dvc_bucket_arn]
+  }
+
+  statement {
+    sid = "DvcObjects"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${var.dvc_bucket_arn}/*"]
+  }
+
+  # DVC バケットは KMS 暗号化のため、オブジェクト操作に kms を要する。
+  statement {
+    sid = "DvcKms"
+    actions = [
+      "kms:Decrypt",
+      "kms:GenerateDataKey",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.region}.amazonaws.com"]
+    }
+  }
+
   # NOTE: シークレットは execution role 経由で task definition の `secrets` として
   # コンテナに注入される。task role には SSM 読取 / kms:Decrypt を **付与しない**
   # （headless Claude が Bash で任意実行できるため、攻撃面を最小化する）。

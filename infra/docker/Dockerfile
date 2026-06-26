@@ -51,17 +51,14 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 
 WORKDIR /app
 
-# --- backend 依存を先に解決（レイヤキャッシュ） -----------------------------
+# --- backend 依存を uv キャッシュへ事前解決（レイヤキャッシュ + 起動高速化） -
+# 実行時は entrypoint が repo を fresh clone し、そのワークツリーで
+# `uv sync` する（git 履歴 + DVC ポインタを得るため）。ここで依存を
+# ダウンロード済みにしておくことで、clone 後の sync を高速化する。
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version /app/backend/
 RUN cd /app/backend && uv sync --locked --no-dev
 
-# --- リポジトリ本体（backend + .claude 規約 + dev スクリプト） --------------
-COPY backend/ /app/backend/
-COPY .claude/ /app/.claude/
-COPY dev/ /app/dev/
-COPY .github/ /app/.github/
-
-# --- ループ用スクリプト ------------------------------------------------------
+# --- ループ用スクリプト（不変。実行時はここから起動）------------------------
 COPY infra/scripts/ /app/loop/
 RUN chmod +x /app/loop/*.sh
 

@@ -15,8 +15,12 @@
 set -uo pipefail
 
 readonly MODE="${1:-loop}"
-readonly REPO_DIR="/app"
-readonly LOOP_DIR="${REPO_DIR}/loop"
+# イメージに焼いたスクリプト群の場所（不変）。
+readonly LOOP_DIR="/app/loop"
+# 実作業ツリー。git 履歴 + remote + DVC ポインタを持つ clone を毎回作る
+# （イメージには .git を含めないため）。loop/submit 双方ここで動く。
+readonly WORK_DIR="${WORK_DIR:-/work/neurogolf}"
+readonly GITHUB_REPO="${GITHUB_REPO:-YuriNakayama/neurogolf}"
 readonly SSM_PREFIX="/neurogolf"
 
 # shellcheck source=infra/scripts/s3_logger.sh
@@ -51,7 +55,7 @@ init_secrets() {
 init_git_identity() {
   git config --global user.name "neurogolf-bot"
   git config --global user.email "bot@neurogolf.local"
-  git config --global --add safe.directory "${REPO_DIR}"
+  git config --global --add safe.directory "${WORK_DIR}"
   # gh はトークンを GH_TOKEN 環境変数から自動的に拾う。
   if [[ -n "${GH_TOKEN:-}" ]]; then
     git config --global \
@@ -60,14 +64,44 @@ init_git_identity() {
   fi
 }
 
+# --- 作業ツリーの準備（fresh clone）----------------------------------------
+# イメージには .git を含めないため、起動毎に最新 main を clone する。
+# これにより git 履歴・remote・DVC ポインタ(*.dvc)・.dvc/config が揃い、
+# git self-merge と dvc pull/push の双方が成立する。
+prepare_workspace() {
+  if [[ -z "${GH_TOKEN:-}" ]]; then
+    log_error "GH_TOKEN missing; cannot clone ${GITHUB_REPO}"
+    return 1
+  fi
+  rm -rf "${WORK_DIR}"
+  mkdir -p "$(dirname "${WORK_DIR}")"
+  local url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPO}.git"
+  if git clone --depth 50 "${url}" "${WORK_DIR}" >/dev/null 2>&1; then
+    log_info "cloned ${GITHUB_REPO} into ${WORK_DIR}"
+  else
+    log_error "git clone failed for ${GITHUB_REPO}"
+    return 1
+  fi
+  # backend 依存をワークツリーで解決（イメージの uv キャッシュを再利用）。
+  (cd "${WORK_DIR}/backend" && uv sync --locked --no-dev >/dev/null 2>&1) || \
+    log_warn "uv sync in workspace failed; relying on image deps"
+}
+
 main() {
   init_secrets
   log_init "${MODE}"
   log_info "entrypoint mode=${MODE} starting"
 
+  init_git_identity
+  if ! prepare_workspace; then
+    log_error "workspace preparation failed; aborting"
+    log_sync
+    exit 70
+  fi
+  export WORK_DIR
+
   case "${MODE}" in
     loop)
-      init_git_identity
       exec "${LOOP_DIR}/loop_runner.sh"
       ;;
     submit)
