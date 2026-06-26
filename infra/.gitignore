@@ -1,0 +1,16 @@
+# Terraform 作業ディレクトリ・state・変数（秘匿値）はコミットしない。
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# 実値を含む tfvars（*.example はコミットする）
+terraform.tfvars
+*.auto.tfvars
+
+# provider lock は再現性のためコミットしてよいが、ローカル init で生成された
+# darwin_arm64 専用 lock を誤ってコミットしないよう、ここでは除外して
+# CI/初回 apply 側で生成させる方針にする。
+.terraform.lock.hcl

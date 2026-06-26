@@ -1,0 +1,13 @@
+#### 概要
+
+ECS 上の自律精度改善ループによる自動 PR。1 サイクル 1 改善（ソルバ拡充 / cost 削減 / cost 推定精緻化のいずれか）。
+
+#### 変更内容
+
+- 自動エージェントが `docs/develop/MIGRATION.md` の残タスクから 1 つを選び実装。
+- ローカルで `dev/lint`（ruff+mypy）と `dev/test-bot`（pytest）を実行済み。
+- 最終ゲートは CI（`ci.yml`）。green の場合のみセルフマージされる。
+
+#### コメント
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)

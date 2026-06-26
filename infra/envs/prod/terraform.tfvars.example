@@ -1,0 +1,14 @@
+# cp terraform.tfvars.example terraform.tfvars してから値を埋める。
+# account_id は backend / locals で自動解決されるため不要。
+
+region                  = "ap-northeast-1"
+image_tag               = "latest"
+github_repo             = "YuriNakayama/neurogolf"
+submit_schedule         = "rate(15 minutes)"
+branch_interval_seconds = 10800
+
+# コスト調整用（Fargate Spot 前提）
+loop_cpu      = 1024
+loop_memory   = 2048
+submit_cpu    = 512
+submit_memory = 1024

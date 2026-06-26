@@ -1,0 +1,6 @@
+# bootstrap は local state で apply する。state はコミットしない。
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars

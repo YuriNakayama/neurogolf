@@ -30,6 +30,7 @@ backend/                Python implementation (pyproject.toml / uv.lock live her
   tests/                Pytest unit tests
 data/                   4 layers (lake / processed / mart / output) (gitignored, DVC-managed)
 dev/                    Development scripts (each cd's into backend and runs uv internally)
+infra/                  Terraform/AWS: ECS 上の Claude 自律改善ループ + 15分毎 Kaggle submit (infra/README.md)
 docs/
   develop/              
 ```

@@ -1,0 +1,34 @@
+# neurogolf-loop イメージ用。ビルドコンテキストはリポジトリルート。
+# 大容量・不要・秘匿物を除外する。
+
+.git/
+.github/workflows/*.log
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+.mypy_cache/
+
+# 仮想環境・ビルド生成物（イメージ内で uv sync し直す）
+backend/.venv/
+backend/.coverage
+**/*.egg-info/
+
+# データ層（DVC/S3 管理、イメージに含めない）
+data/
+
+# 秘匿物（SSM で注入する。イメージに焼かない）
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+
+# Claude worktrees / ローカル生成物
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+**/*.onnx
+
+# エディタ
+.vscode/
+.idea/

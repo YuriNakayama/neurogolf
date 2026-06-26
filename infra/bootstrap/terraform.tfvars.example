@@ -1,0 +1,6 @@
+# cp terraform.tfvars.example terraform.tfvars してから値を埋める。
+# account_id は `aws sts get-caller-identity --query Account --output text` で取得。
+
+region             = "ap-northeast-1"
+account_id         = "000000000000"
+log_retention_days = 30

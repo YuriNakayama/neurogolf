@@ -72,9 +72,19 @@ PTCG ドメインを置き換える NeuroGolf 中核を実装済み。`dev/test-
 
 ---
 
+## 🤖 自律運用基盤（infra/ 再導入）
+
+PTCG テンプレの旧 `infra/`（GPU 学習向け Terraform）は削除済みだったが、NeuroGolf 用に **ECS 上の Claude 自律精度改善ループ**として `infra/` を新規導入した（[`infra/README.md`](../../infra/README.md)）。
+
+- **構成**: Terraform で AWS（ECR / ECS Fargate Spot / EventBridge Scheduler / SSM SecureString / IAM 最小権限 / S3 ログ）を管理。state は専用 S3 + DynamoDB lock（`logs/` `state/` prefix 分離）。
+- **submit**: 15 分毎に EventBridge Scheduler → ECS RunTask（短命）で `python -m submit`。fingerprint で重複提出を抑制。
+- **ループ**: 常駐 ECS タスクが 3 時間毎に `main` からブランチ → Claude Code CLI headless で実装 → PR → **CI（`ci.yml`）green を必須**にセルフマージ。合間は精度測定・改善案・Web 調査プランニングを継続。
+- **ログ**: 全活動を S3 `logs/` に常時書き出し（シークレットはマスキング）。
+- **未了の運用ステップ**: bootstrap apply / SSM 実値投入 / イメージ build & push / prod apply / `main` ブランチ保護で CI 必須化（手順は `infra/README.md`）。
+
 ## ⏳ 後回し（外部リソース確定後）
 
-- **DVC を使うか自体が要検討**: GPU 学習・大規模データ管理用の `infra/`（Terraform S3 remote）・`gpu/` は削除済み。NeuroGolf がオフライン ONNX golf 中心なら DVC は不要かもしれない。使う場合のみ以下:
+- **DVC を使うか自体が要検討**: GPU 学習・大規模データ管理用の旧 `gpu/` は削除済み。NeuroGolf がオフライン ONNX golf 中心なら DVC は不要かもしれない。使う場合のみ以下:
   - `.claude/rules/data.md` 等に残るプレースホルダ `neurogolf-dvc-000000000000` を実バケット名に
   - `dvc init` + `dvc remote add`（`.dvc/` は未初期化）
   - S3 バケット / IAM は手動 or 新 infra を作り直し（旧 Terraform は削除済み）
