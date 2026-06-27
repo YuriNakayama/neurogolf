@@ -55,6 +55,9 @@ WORKDIR /app
 # 実行時は entrypoint が repo を fresh clone し、そのワークツリーで
 # `uv sync` する（git 履歴 + DVC ポインタを得るため）。ここで依存を
 # ダウンロード済みにしておくことで、clone 後の sync を高速化する。
+# backend/pyproject.toml は readme = "../README.md" を参照するため、
+# ローカルパッケージ build 用に repo root の README.md も配置する。
+COPY README.md /app/README.md
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version /app/backend/
 RUN cd /app/backend && uv sync --locked --no-dev
 
