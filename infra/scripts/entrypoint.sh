@@ -137,6 +137,27 @@ json.dump(d, sys.stdout)
     || log_warn "failed to mark workspace trusted"
 }
 
+# --- dvc 到達性の軽量チェック ----------------------------------------------
+# remote 'storage' の S3 URL を .dvc/config から引き、その prefix を
+# `aws s3 ls`（task role IAM）で bounded に叩く。remote 未設定 / S3 到達不可なら
+# 非ゼロ。`dvc status -c` の全走査（数分）を避けるための軽量版。
+dvc_preflight() {
+  local url bucket prefix bp
+  # 1) remote URL を取得（config 操作のみ・即時）。
+  url="$(cd "${WORK_DIR}" && timeout 30 \
+    uv --project backend run dvc remote list 2>/dev/null \
+    | awk '$1=="storage"{print $2; exit}')"
+  if [[ -z "${url}" || "${url}" != s3://* ]]; then
+    return 1
+  fi
+  # 2) s3://bucket/prefix を分解し、IAM で bounded に到達確認。
+  bp="${url#s3://}"
+  bucket="${bp%%/*}"
+  prefix="${bp#*/}"
+  timeout 30 aws s3 ls "s3://${bucket}/${prefix}/" \
+    --region "${AWS_REGION:-ap-northeast-1}" >/dev/null 2>&1
+}
+
 # --- preflight: git / kaggle / dvc が実際に使えるか起動時に検証 -------------
 # 「ECS を立ち上げると常に git / kaggle submit / dvc が使える」ことを保証する。
 # clone 済み WORK_DIR を前提に各機能を能動的に叩く。失敗は明示ログを出し、
@@ -162,12 +183,16 @@ preflight_check() {
     ok=1
   fi
 
-  # dvc: remote 'storage' が設定され、IAM(task role)で到達できるか。
-  if (cd "${WORK_DIR}" && uv --project backend run dvc status -c -r storage \
-      >/dev/null 2>&1); then
-    log_info "preflight dvc: OK (remote 'storage' reachable via IAM)"
+  # dvc: remote 'storage' が設定され、IAM(task role)で S3 に到達できるか。
+  # 注意: `dvc status -c -r storage` は remote キャッシュ全体を走査するため
+  # 数分単位で遅く、起動を block する。代わりに (1) remote 設定の存在を
+  # `dvc remote list` で確認し、(2) その S3 URL を `aws s3 ls` で bounded に
+  # 叩いて IAM 到達性を確認する。どちらも config/HEAD 操作で軽量。timeout で
+  # 上限を設けハングを防ぐ。
+  if dvc_preflight; then
+    log_info "preflight dvc: OK (remote 'storage' configured + S3 reachable via IAM)"
   else
-    log_error "preflight dvc: FAIL (remote unreachable — check .dvc/config + task role)"
+    log_error "preflight dvc: FAIL (remote unconfigured or S3 unreachable — check .dvc/config + task role)"
     ok=1
   fi
 
