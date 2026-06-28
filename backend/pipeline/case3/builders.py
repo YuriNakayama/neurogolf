@@ -79,14 +79,47 @@ def build_permute_axes(perm: tuple[int, int, int, int]) -> onnx.ModelProto:
     return _model([node], [])
 
 
-def build_flip(axis: int) -> onnx.ModelProto:
-    """空間反転を Slice の負ステップで表現（axis: 2=縦, 3=横）。
+def _rev_idx(size: int) -> list[int]:
+    """``0..size-1`` を逆順にし、``size..29`` はそのまま残すインデックス。"""
+    return list(range(size - 1, -1, -1)) + list(range(size, GRID_MAX))
 
-    Slice の starts/ends/axes/steps を initializer で与える。中間テンソルなし。
+
+def build_flip(size: int, axis: int) -> onnx.ModelProto:
+    """Gather で先頭 ``size`` 要素だけ逆順にする（残りは padding でゼロ維持）。
+
+    Slice 版と異なり次元依存の Gather を使うため、任意サイズの ARC グリッドで
+    content が top-left に留まる。params = 30（index initializer 1 本）。
     """
-    starts = helper.make_tensor("s", TensorProto.INT64, [1], [-1])
-    ends = helper.make_tensor("e", TensorProto.INT64, [1], [-(GRID_MAX + 1)])
-    axes = helper.make_tensor("a", TensorProto.INT64, [1], [axis])
-    steps = helper.make_tensor("t", TensorProto.INT64, [1], [-1])
-    node = helper.make_node("Slice", ["input", "s", "e", "a", "t"], ["output"])
-    return _model([node], [starts, ends, axes, steps])
+    idx = _rev_idx(size)
+    init = helper.make_tensor("idx", TensorProto.INT64, [GRID_MAX], idx)
+    node = helper.make_node("Gather", ["input", "idx"], ["output"], axis=axis)
+    return _model([node], [init])
+
+
+def build_rot180(h: int, w: int) -> onnx.ModelProto:
+    """h×w グリッドを 180° 回転（縦・横それぞれ Gather で逆順）。"""
+    hidx = _rev_idx(h)
+    widx = _rev_idx(w)
+    h_init = helper.make_tensor("hidx", TensorProto.INT64, [GRID_MAX], hidx)
+    w_init = helper.make_tensor("widx", TensorProto.INT64, [GRID_MAX], widx)
+    g1 = helper.make_node("Gather", ["input", "hidx"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "widx"], ["output"], axis=3)
+    return _model([g1, g2], [h_init, w_init])
+
+
+def build_rot90(h: int) -> onnx.ModelProto:
+    """rot90 CW: Transpose(0,1,3,2) → Gather 新 width 軸を逆順（= 旧 height h）。"""
+    idx = _rev_idx(h)
+    init = helper.make_tensor("idx", TensorProto.INT64, [GRID_MAX], idx)
+    t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
+    g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=3)
+    return _model([t, g], [init])
+
+
+def build_rot270(w: int) -> onnx.ModelProto:
+    """rot270 CCW: Transpose(0,1,3,2) → Gather 新 height 軸を逆順（= 旧 width w）。"""
+    idx = _rev_idx(w)
+    init = helper.make_tensor("idx", TensorProto.INT64, [GRID_MAX], idx)
+    t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
+    g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
+    return _model([t, g], [init])
