@@ -14,6 +14,7 @@ import onnx
 
 from . import builders as B
 from .arc import NUM_COLORS, Example, Task, grid_shape
+from .floodfill import build_floodfill_8conn
 from .lookup import _build_table
 from .residual import build_residual
 from .smalllookup import build_small_lookup
@@ -215,6 +216,10 @@ def solve_residual5(task: Task) -> onnx.ModelProto | None:
     return build_residual(task.valid_examples(), 5)
 
 
+def solve_floodfill(task: Task) -> onnx.ModelProto | None:
+    return build_floodfill_8conn(task.valid_examples())
+
+
 # 適用順: cost が小さいものを先に（同点なら先勝ち）。検証側が cost 最小を選ぶので順序は目安。
 SOLVERS: list[tuple[str, Solver]] = [
     ("identity", solve_identity),
@@ -230,4 +235,5 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
+    ("floodfill", solve_floodfill),
 ]

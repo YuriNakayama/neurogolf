@@ -17,6 +17,8 @@ N は「実際に伝播が必要な最大距離」に抑える（タスクの最
 
 from __future__ import annotations
 
+from collections import deque
+
 import numpy as np
 import onnx
 from onnx import TensorProto, helper
@@ -24,6 +26,8 @@ from onnx import TensorProto, helper
 from .arc import NUM_COLORS, Example
 
 _DTYPE = TensorProto.FLOAT
+_U8 = TensorProto.UINT8
+_I64 = TensorProto.INT64
 GRID = 30
 GRID_SHAPE = [1, NUM_COLORS, GRID, GRID]
 
@@ -210,4 +214,179 @@ def build_floodfill(
     graph = helper.make_graph(nodes, "floodfill", [x], [y], inits)
     return helper.make_model(
         graph, ir_version=10, opset_imports=[helper.make_opsetid("", 10)]
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8連結 UINT8 flood-fill (コスト最適版)
+# ---------------------------------------------------------------------------
+
+
+def _find_line_color(examples: tuple[Example, ...], fill: int) -> int | None:
+    """入力に現れる唯一の非ゼロ・非 fill 色（線色）を返す。複数あれば None。"""
+    colors: set[int] = set()
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        for c in np.unique(a):
+            c_int = int(c)
+            if c_int != 0 and c_int != fill:
+                colors.add(c_int)
+    if len(colors) != 1:
+        return None
+    return colors.pop()
+
+
+def _min_8conn_steps(examples: tuple[Example, ...]) -> int:
+    """外周から 8 連結 BFS で border-reachable 自由セル全体に到達するのに必要な最小ステップ数。"""
+    max_depth = 0
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        h, w = a.shape
+        free = a == 0
+        dist: np.ndarray = np.full((h, w), -1, dtype=np.int64)
+        dq: deque[tuple[int, int]] = deque()
+        for r in range(h):
+            for c in range(w):
+                if free[r, c] and (r == 0 or r == h - 1 or c == 0 or c == w - 1):
+                    dist[r, c] = 0
+                    dq.append((r, c))
+        while dq:
+            r, c = dq.popleft()
+            for dr in range(-1, 2):
+                for dc in range(-1, 2):
+                    if dr == 0 and dc == 0:
+                        continue
+                    nr, nc = r + dr, c + dc
+                    if (
+                        0 <= nr < h
+                        and 0 <= nc < w
+                        and free[nr, nc]
+                        and dist[nr, nc] == -1
+                    ):
+                        dist[nr, nc] = dist[r, c] + 1
+                        dq.append((nr, nc))
+        reachable = dist[dist >= 0]
+        if reachable.size > 0:
+            max_depth = max(max_depth, int(reachable.max()))
+    return max_depth
+
+
+def build_floodfill_8conn(
+    examples: tuple[Example, ...], n_steps: int | None = None
+) -> onnx.ModelProto | None:
+    """8 連結 UINT8 border flood-fill ONNX を構築。解けなければ None。
+
+    frank7166 の INT8/UINT8 アーキテクチャを参考に実装:
+    - 8 連結 MaxPool [3,3] でダイレーション
+    - ステップ数 = BFS Chebyshev 最小（frank7166 より少ない）
+    - Concat + Pad で出力を構築（大きな float 中間テンソルを回避）
+    """
+    det = _detect(examples)
+    if det is None:
+        return None
+    _, fill = det
+    line = _find_line_color(examples, fill)
+    if line is None or line == fill:
+        return None
+
+    m = _max_dim(examples)
+    if m < 3:
+        return None
+
+    steps = n_steps if n_steps is not None else _min_8conn_steps(examples)
+
+    nodes: list[onnx.NodeProto] = []
+    inits: list[onnx.TensorProto] = []
+
+    # 共有 Slice 軸 + ch0 / ch_line スライス indices
+    inits += [
+        helper.make_tensor("ax", _I64, [3], [1, 2, 3]),
+        helper.make_tensor("s0", _I64, [3], [0, 0, 0]),
+        helper.make_tensor("e0", _I64, [3], [1, m, m]),
+        helper.make_tensor("sL", _I64, [3], [line, 0, 0]),
+        helper.make_tensor("eL", _I64, [3], [line + 1, m, m]),
+        helper.make_tensor("one_u8", _U8, [], [1]),
+    ]
+
+    # ch0 (bg) と ch_line をスライスして UINT8 にキャスト
+    nodes.append(helper.make_node("Slice", ["input", "s0", "e0", "ax"], ["c0_f"]))
+    nodes.append(helper.make_node("Slice", ["input", "sL", "eL", "ax"], ["cL_f"]))
+    nodes.append(helper.make_node("Cast", ["c0_f"], ["color0"], to=_U8))  # ch0 (出力用)
+    nodes.append(helper.make_node("Cast", ["cL_f"], ["colorL"], to=_U8))  # 線セル
+
+    # free = 1 - colorL: out-of-bounds セルも自由として扱い伝播を可能にする
+    nodes.append(helper.make_node("Sub", ["one_u8", "colorL"], ["free"]))
+
+    # border mask: 外周 1 ピクセル = 1, 内側 = 0
+    bm = np.zeros((1, 1, m, m), dtype=np.uint8)
+    bm[0, 0, 0, :] = 1
+    bm[0, 0, -1, :] = 1
+    bm[0, 0, :, 0] = 1
+    bm[0, 0, :, -1] = 1
+    inits.append(helper.make_tensor("seed", _U8, [1, 1, m, m], bm.flatten().tolist()))
+
+    # ext0 = 外周 bg セル (初期シード)
+    nodes.append(helper.make_node("Mul", ["free", "seed"], ["ext0"]))
+
+    # 8 連結ダイレーション
+    cur = "ext0"
+    for k in range(steps):
+        mp = f"mp{k}"
+        nxt = f"ext{k + 1}"
+        nodes.append(
+            helper.make_node(
+                "MaxPool",
+                [cur],
+                [mp],
+                kernel_shape=[3, 3],
+                pads=[1, 1, 1, 1],
+                strides=[1, 1],
+            )
+        )
+        nodes.append(helper.make_node("Mul", [mp, "free"], [nxt]))
+        cur = nxt
+
+    # interior = free - reach (= 囲まれた bg セル)
+    nodes.append(helper.make_node("Sub", ["free", cur], ["interior"]))
+
+    # out_bg: border-reachable bg を color0 でマスク (OOB を除外)
+    nodes.append(helper.make_node("Mul", ["color0", cur], ["out_bg"]))
+
+    # 出力チャネル組立: 0..max(line, fill) を Concat してから Pad
+    max_ch = max(line, fill)
+    need_z0 = any(k != 0 and k != fill and k != line for k in range(1, max_ch + 1))
+    if need_z0:
+        nodes.append(helper.make_node("Sub", ["free", "free"], ["z0"]))
+
+    concat_inputs: list[str] = []
+    for k in range(max_ch + 1):
+        if k == 0:
+            concat_inputs.append("out_bg")
+        elif k == fill:
+            concat_inputs.append("interior")
+        elif k == line:
+            concat_inputs.append("colorL")
+        else:
+            concat_inputs.append("z0")
+
+    n_concat = max_ch + 1
+    nodes.append(helper.make_node("Concat", concat_inputs, ["small"], axis=1))
+
+    # Pad [1, n_concat, m, m] → [1, 10, 30, 30]
+    pad_cfg = [0, 0, 0, 0, 0, NUM_COLORS - n_concat, GRID - m, GRID - m]
+    inits += [
+        helper.make_tensor("padcfg", _I64, [8], pad_cfg),
+        helper.make_tensor("zero_u8", _U8, [], [0]),
+    ]
+    nodes.append(
+        helper.make_node(
+            "Pad", ["small", "padcfg", "zero_u8"], ["output"], mode="constant"
+        )
+    )
+
+    x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
+    y = helper.make_tensor_value_info("output", _U8, GRID_SHAPE)
+    graph = helper.make_graph(nodes, "floodfill8", [x], [y], inits)
+    return helper.make_model(
+        graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
     )

@@ -150,3 +150,92 @@ def test_solve_rot270_3x3() -> None:
     res = _run_audit(model, _examples(g, rot))
     assert res["status"] == "ok"
     assert res["n_fail"] == 0
+
+
+# ─── floodfill (8-connectivity) ────────────────────────────────────────────
+
+
+def test_solve_floodfill_simple_enclosed() -> None:
+    """5×5: 1 が囲む内側の 0 を 2 で塗りつぶす。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 0, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 2, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_floodfill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_floodfill_larger_enclosed() -> None:
+    """7×7: 線色=3, 塗り色=5 の囲み領域。"""
+    inp = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 3, 3, 3, 3, 3, 0],
+        [0, 3, 0, 0, 0, 3, 0],
+        [0, 3, 0, 0, 0, 3, 0],
+        [0, 3, 0, 0, 0, 3, 0],
+        [0, 3, 3, 3, 3, 3, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 3, 3, 3, 3, 3, 0],
+        [0, 3, 5, 5, 5, 3, 0],
+        [0, 3, 5, 5, 5, 3, 0],
+        [0, 3, 5, 5, 5, 3, 0],
+        [0, 3, 3, 3, 3, 3, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_floodfill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_floodfill_not_applicable_returns_none() -> None:
+    """非 flood-fill タスクは None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_floodfill(_task(g, g)) is None
+
+
+def test_solve_floodfill_recolor_not_applicable() -> None:
+    """単純 recolor (全体の色変換) は flood-fill ではない。"""
+    inp = [[1, 1], [1, 1]]
+    out = [[2, 2], [2, 2]]
+    assert solvers.solve_floodfill(_task(inp, out)) is None
+
+
+def test_solve_floodfill_cost_below_threshold() -> None:
+    """生成コスト < 10000 であること (基本的な小グリッドの上限チェック)。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 0, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 2, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_floodfill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["cost"] is not None
+    assert res["cost"] < 10000
