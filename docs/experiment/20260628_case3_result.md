@@ -46,6 +46,11 @@
 - **task287**(1994): 最小一致 k=9（対称性 Einsum で実装）。task246/168/051: 純粋局所でない(k=None)。
 - → 中コスト帯も bundle が最小 conv/最小 step/専用アルゴで実装済み。redesign win 無し。
 
+**系統的 conv-shrink 検査**（中コスト同形状・全純粋局所タスク）: 各タスクの真の最小一致 k と
+bundle の実カーネルサイズを比較。**ほぼ全タスクで bundle_k ≤ min_k**（bundle は naive k×k lookup
+ではなく 1×1 conv + shift/ReduceMax 等の多段で既に安く実装）。bundle_k>min_k は t032/t139
+（共に cost~910, 9→7/5 縮小可だが gain +0.04 と無視可能）のみ。→ conv 縮小の余地も systematic に無し。
+
 ## 現状と次の一手
 
 - floor 7172.43 は全公開手法の上限付近。LB トップは非公開チーム 7942.46（≒目標 7950）。
