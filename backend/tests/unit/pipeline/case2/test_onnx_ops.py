@@ -84,3 +84,23 @@ def test_identity_is_zero_cost() -> None:
     res = _score(ops.identity(), None)
     assert res["cost"] == 0
     assert res["points"] == pytest.approx(25.0)
+
+
+def test_subgrid_exact() -> None:
+    # Crop [1:3, 1:3] from a 3x3 grid → bottom-right 2x2.
+    inp = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    out = [[5, 6], [8, 9]]
+    res = _score(ops.subgrid(1, 3, 1, 3), _task(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+    assert res["n_pass"] == 1
+
+
+def test_subgrid_top_right_exact() -> None:
+    # Crop [0:2, 1:3] from a 3x3 grid → top-right 2x2.
+    inp = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    out = [[2, 3], [5, 6]]
+    res = _score(ops.subgrid(0, 2, 1, 3), _task(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+    assert res["n_pass"] == 1

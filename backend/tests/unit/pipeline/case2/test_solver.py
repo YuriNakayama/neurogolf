@@ -55,3 +55,21 @@ def test_solve_unknown_returns_none(tmp_path: Path) -> None:
     # and the shapes/contents match no geometry. No primitive should fit.
     sol = solver.solve(_write_task(tmp_path, [[1, 1], [1, 1]], [[2, 3], [4, 5]]))
     assert sol is None
+
+
+def test_solve_subgrid_top_right(tmp_path: Path) -> None:
+    # Extract top-right 2x2 from a 3x3: crop [0:2, 1:3].
+    inp = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    out = [[2, 3], [5, 6]]
+    sol = solver.solve(_write_task(tmp_path, inp, out))
+    assert sol is not None
+    assert sol.name == "subgrid"
+
+
+def test_solve_subgrid_bottom_right(tmp_path: Path) -> None:
+    # Extract bottom-right 2x2 from a 3x3: crop [1:3, 1:3].
+    inp = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    out = [[5, 6], [8, 9]]
+    sol = solver.solve(_write_task(tmp_path, inp, out))
+    assert sol is not None
+    assert sol.name == "subgrid"
