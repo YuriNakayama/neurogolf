@@ -660,3 +660,193 @@ dsl v11_bundle を harvest → 2 wins: **t378 4484→3733（+0.183!）**, t358 4
 t378 をさらに 3728 へ。注: t378 は元々私の redundant-elim win（4489→4484）だったが dsl が大幅 golf。
 v10 提出 → 実 LB **7170.32**（前 7170.06 から +0.26）。本セッション開始 7166.10 から **+4.22**。
 floor を 7170.32 へ更新。7665 まで −494.7。
+
+## E32: floor-zip 差分から t023/t182/t206 の未提出 surgery win 発見 → 実 LB 7170.69
+
+floor-zip(7170.32) と combined_best を md5 比較 → 3 タスク差分: t023(22386→16337,+0.315),
+t182(8030→7585,+0.057), t206(4199→4192,+0.002)。いずれも faithful n_fail=0 で combined_best が
+**未提出のまま floor を +0.374 上回っていた**（過去 surgery pass の取りこぼし）。v13 提出 →
+実 LB **7170.69**（前 7170.32 から +0.37, 予測値と完全一致）。本セッション開始 7166.10 から **+4.59**。
+floor を 7170.69 へ更新（zip + read-only dir, byte 一致検証済）。7665 まで −494.3。
+教訓: floor-zip と combined_best の md5 差分監査は、surgery が黙って積んだ未提出 win を拾う安価な手段。
+
+## E33: dsl session の全 30 bundle を網羅 harvest（frank766/bis_*/blend_* 系を新規スキャン）
+
+harvest_v12 は 4 source のみ走査だったが、dsl scratchpad に **30 個の full 400-task bundle**
+（bis_A/B/B1/B2/C173/C202, best_base, blend_kokinn, frank766_extract, narrow_out, opt_bundle 等）が
+存在。frank766/kojimar/seddik/kokinn は Kaggle 作者ハンドル → 外部 public base の実験群。
+全 30 source を faithful 監査で cherry-pick する harvest_v14 を起動（candidate 134 タスク）。結果は次項。
+
+### E33 結果: 30 bundle 網羅 harvest → 2 wins +0.0089（外部 base 群は現ベスト未満を確定）
+
+candidate 134 タスクを全 30 source で faithful 監査 → **2 wins**: t066(19807→19647, fp16_out 由来),
+t319(22242→22224, narrow_out 由来)。いずれも高コストタスクの memory 微減（+0.0089）。
+重要な確認: **frank766/kojimar/seddik/kokinn/bis_* 等の外部 public base 実験群は、私の
+combined_best を 1 タスクも上回らなかった**。→ これらは dsl session が外部 notebook を試した
+劣化版であり、win 源ではない。bespoke golf 源は依然 golf_wins(dsl の自作)に限られる。
+surgery は t066/t319 で fixpoint（fp16_out/narrow_out は既に surgery 済み）。v14 提出（degrade-check 兼用）。
+
+### E33 提出結果: v14 = 実 LB 7170.70（新 team best, degrade なし確認）
+
+t066/t319 の harvest win → 実 LB **7170.70**（前 7170.69 から +0.01, 予測 +0.0089 と一致）。
+400 タスク全体の degrade-check も同時通過（劣化なし）。floor を 7170.70 へ更新（byte 検証済）。
+本セッション開始 7166.10 から **+4.60**。7665 まで −494.3。
+所見: collaborative harvest の井戸はほぼ枯渇（dsl の全 30 bundle + golf_wins を集約済、外部 base は劣化版）。
+今後の伸びは (a) dsl の新規 bespoke golf、(b) 私自身の新レバー探索、に依存。次サイクルで後者を起動検討。
+
+## E34: int8 ダウンキャスト surgery — 実装完了も 0 wins（surgery の限界を実証）
+
+fresh-context agent が「59 タスクに整数値 fp32 中間テンソル（177KB 回収可能）」を発見 → t029 で
+8 中 7 が int8 安全と実証。これを受け audit-gated な `int8_surgery` パスを実装（surgery.py, lint/mypy clean,
+PASSES 登録）。だが 400 タスクスイープで **0 wins**。決定的な 2 つの壁を実測確認:
+1. **scorer は全ノード出力を memory 計上** → fp32 producer の出力を Cast→int8 すると、元 fp32(大)
+   と int8 コピーが**両方残り純増**（t029 実測 10766→11126）。利得には producer が int を native 出力する必要。
+2. **大テンソルは input 由来で Einsum/ReduceSum を通る** → ORT 1.24.1 はこれらを int32 のみ対応
+   （省メモリ効果ゼロ）、int8 非対応。
+結論（3 agent + probe で確定）: **post-hoc surgery（fp16/int8/channel-collapse）は飽和**。
+さらなる利得は **build 時の int-first ネット再設計**か dsl の新規 bespoke win のみ。int8_surgery は
+audit-gated で無害（0 win 時 no-op）のため実装は保持。int8_candidate dir は combined_best とバイト一致のため削除。
+
+## E35: task002 int-first 再設計 → 33317（+0.166, redesign レバー実証）
+
+agent が task002 をゼロから再構築。**真の変換は局所 3×3 ではなく 4-連結 flood-fill**（enclosed
+interior を color4 で塗る、global ルール）と判明。numpy で全 268 例一致を確認 → int8 throughout の
+ネット（74 nodes, params 34, int8 output で float cast 回避）。**39316→33317（+0.166, n_fail=0/268）**。
+surgery で 1 byte 追加削減。v15 提出。
+教訓: agent の cost 推定（→1500, +3.27）は楽観的すぎた。task002 は flood ~30 反復が本質的に必要で
+コスト下限が高い。「高コストタスクは変換自体が高コスト」という構造下限の直感を再確認。だが redesign は
+surgery と違い実 win を生む唯一の自前レバー。次は複数タスクへ並列展開して一般化を検証。
+
+### E35 提出結果: v15 = 実 LB 7170.87（新 team best, redesign が実 LB 利得を実証）
+
+task002 redesign（39316→33317）→ 実 LB **7170.87**（前 7170.70 から +0.17, 予測一致）。
+**int-first ネット再設計が実 LB 利得を生む唯一の自前レバーと end-to-end 実証**。floor を 7170.87 へ更新。
+本セッション開始 7166.10 から **+4.77**。7665 まで −494.1。次: t187/t076/t364 の並列 redesign 結果を回収。
+
+## E36: redesign 並列展開 第1波（t187/t076/t364）→ 3/4 勝率
+
+t002 に続き t187/t076/t364 を並列再設計。結果:
+- **t076**: 25678→25005（+0.027）— CC+dihedral template-copy（非局所）。既存ネット論理は最適、
+  scatter-tail を f16→int8 化して golf。
+- **t187**: 41696→40446（+0.030）— ACCEPT。surgery で 2 byte 追加削減。
+- **t364**: rebuild は 30982 > 26049 で **REJECT**（既存ネットを下回れず）。
+集計: t002+t076+t187 採用、t364 棄却 = **3/4 勝率、平均 ~+0.07/task**。v15 から +0.057 を v16 提出。
+評価: redesign は一般化するが per-task 利得は小（変換が本質的に複雑、既存ネット論理はほぼ最適、
+利得は surgery 取りこぼしの dtype/構造 golf）。残り ~25 高コストタスクで +1.5〜2pt 見込み。第2波展開。
+
+### E36 提出結果: v16 = 実 LB 7170.92（新 team best）
+
+t076+t187 redesign → 実 LB **7170.92**（前 7170.87 から +0.05, 予測一致）。floor を 7170.92 へ更新。
+本セッション開始 7166.10 から **+4.82**。7665 まで −494.1。redesign 第2波（t286/t349/t018/t191）展開中。
+
+## E37: redesign 第2波 結果 + dsl golf_wins 再活性化（33→43）
+
+第2波（t286/t349/t018/t191/t364再試行）結果:
+- **t364 第2試行**: 26049→25209（+0.033）✓ ACCEPT。Conv kernel center=20 で seed を Gather で gate、
+  seed-mask の Mul を削除する新技。
+- **t018**: rule 完全解明（266/266 numpy 一致）も ONNX は本質的に ~905-node 非局所プログラム
+  （連結成分ラベリング＋合同整列＋二面体選択＋scatter）。float32 入力制約が最有力 golf を封じ、
+  best-known 66319 を下回れず → no-win（正直報告、保存せず）。
+- **t349**: rule 解明（267/267）も from-scratch ネットは 95542 >> 38986（-0.90）→ REJECT。
+- **t286/t191**: no-win（baseline 下回れず）。
+集計: 第2波は **1/5 勝（t364 のみ）**。redesign の per-task ROI は逓減（残る高コストタスクは
+真に複雑な非局所プログラム、コミュニティ収束済）。
+**重要**: redesign 中に dsl golf_wins が 33→43（+10）に再活性化。harvest が高 ROI 源に復帰 → v17 で harvest 起動。
+
+## E38: dsl golf_wins 大量 harvest → 16 wins +1.23 + surgery +0.15（最大ジャンプ）
+
+dsl golf_wins 43 を harvest → **16 wins +1.2323**（t161 5217→3733 +0.335, t359 +0.176, t279 +0.141,
+t251 +0.137 等）。**この単発 harvest が本セッションの全 redesign 成果を上回る**。さらに dsl の生 golf は
+未 surgery のため、17 タスクに surgery 適用で **追加 +0.1545**。t364 redesign +0.033 と合わせ局所 ~+1.42。
+v17 提出（期待 ~7172.3）。
+**戦略確定**: dsl session の bespoke golf が支配的 win 源、私の役割は高速集約 + surgery 上乗せ。
+redesign は補助（per-task ROI 逓減）。harvest を最優先で回す。本セッション開始 7166.10 から大幅前進中。
+
+### E38 提出結果: v17 = 実 LB 7172.34（新 team best, 本セッション最大ジャンプ +1.42）
+
+dsl 16 wins harvest + surgery + t364 → 実 LB **7172.34**（前 7170.92 から **+1.42**, 予測一致）。
+本セッション開始 7166.10 から **+6.24**。floor を 7172.34 へ更新。7665 まで −492.7。
+本セッション最大の単発前進。dsl harvest が支配的レバーと再確認。
+
+## E39: ROI 起点ターゲティング → verified-simple タスクに redesign 第3波
+
+使用量上限リセット後、fresh-context agent で「コスト中〜高だが変換が単純」なタスクを ROI 順に探索。
+wave-2 の盲目的高コスト選定と異なり、各変換を numpy で厳密検証して候補化。上位（verified-exact）:
+- **t202** 20173→~1500 (+2.60, 230/230): band 内の zero hole を band 軸に broadcast して 0-stripe 化
+- **t359** 4348→~400 (+2.39, 266/266): 軸方向 mode denoise（既に dsl golf 済だが更に削減可能）
+- **t085** 5381→~1200 (+1.50): solid bar の中心線に交互 hole を punch
+- **t255** 24746→~4000 (+1.82): color-3 cross/region を paint
+上位5の高信頼合計 ~+9.9pt。t202/t359/t085/t255 の rebuild agent を並列起動（第3波）。
+hard-class（t074/t110/t243/t066 等 = symmetry-inpaint/periodic/flood/pathfinding）は除外。
+
+## E40: redesign 第3波 0/4 → redesign レバー枯渇を確定
+
+verified-simple ターゲット（t202/t359/t085/t255）も全敗:
+- **t255**: 非局所と実証（最大長方形/連結成分検出が必須、ノイズと分離不能、最良ルール 207/265）→ no-win。
+- **t202/t359/t085**: ルールは厳密正答（230/230, 266/266, 265/265）だが、from-scratch ネットは
+  既存より高コスト（50374>20173, 6149>4348, 23505>5381）→ 全 REJECT。
+**決定的教訓**: ROI targeting agent の cost 推定（~1500 等）は楽観的すぎた。正しい rebuild が
+既存 golf 済ネットを上回ることは稀。コストは不可避な full-grid 中間テンソルに宿り、論理ではなく
+**golf こそが難所**。wave-2+3 で ~9 タスク試行・1 勝（t364）= redesign ROI ≈ 0。
+**戦略確定**: redesign agent 投入を停止。支配的レバーは **dsl harvest**（1 バッチ +1.23 vs redesign の
+散発 +0.03〜0.17）。dsl session がエンジン、私は高速集約器。harvest 即応体制で待機。
+
+### E40 補遺: t359 第2試行で +0.0139 採用（wave-3 は 1/4、redesign 通算 2/9）
+
+t359 agent が第2パスで Where-vector を 6→4 に統合し **4348→4288（+0.0139, 266/266）** を達成 → ACCEPT。
+t085 は逆に「既存 Conv ネットが構造的最適」を確認（3600B f32 Conv 出力が ORT 下限）= no-win。
+wave-3 最終 **1/4**（t359 のみ）。redesign 通算 **2/9**（t364, t359）。v18 提出（+0.014, degrade-check 兼用）。
+**4+ agent が独立に確認した構造下限**: ORT 1.24.1 の int8/16 Conv・ReduceSum 非対応 + 固定 f32 入力 +
+全ノード出力 memory 計上 → ~3600B/collapse-plane が surgery・redesign で破れない壁。redesign 停止を維持。
+
+### E40 提出結果: v18 = 実 LB 7172.36（新 team best）
+
+t359 redesign → 実 LB **7172.36**（前 7172.34 から +0.02）。floor を 7172.36 へ更新。
+本セッション開始 7166.10 から **+6.26**。7665 まで −492.6。degrade なし。
+以降は dsl harvest 待ち（唯一の残レバー）。redesign 停止維持。
+
+### E40 補遺2: t202 第3パスで +0.0735 採用 → wave-3 は 2/4（redesign 通算 3/10）
+
+t202 agent が第3パスで channel-axis MatMul collapse + fp16 + output-直結 Where により
+**20173→18743（+0.0735, 230/230）** を達成 → ACCEPT。wave-3 最終 **2/4**（t202 +0.074, t359 +0.014）。
+**認識修正**: 「redesign 枯渇」は早計だった。verified-simple ターゲットは agent が初回 reject 後も
+golf を継続すれば勝てる（t202/t359/t364 とも初回 reject → 後続パスで勝利）。私の途中 audit は
+agent の初回試行を拾っていただけで、最終保存ファイルは追加 golf 後に勝つことが多い。
+→ verified-simple ターゲットへの redesign は **per-task +0.01〜0.07 で 50% 勝率** と再評価。残 ROI 候補
+（t064 +1.61, t174 +1.14, t162 +1.00 等）はまだ未試行。dsl harvest（凍結中）と並行で redesign 再開可能。
+v19 提出（+0.074, degrade-check 兼用）。
+
+### v19 = 実 LB 7172.43（新 team best）
+
+t202 redesign → 実 LB **7172.43**（前 7172.36 から +0.07）。floor 更新。本セッション 7166.10 から **+6.33**。
+7665 まで −492.6。degrade なし。wave-4（t064/t174/t162）実行中。
+
+## E41: redesign wave-4 結果 → 全 no-win（既存ネットが既に lean/correct）
+
+t064/t162/t174 すべて no-win:
+- **t162**: 既に最適 4068（1600B f32 入口面が下限）。tie のみ、保存せず。
+- **t064**: ~10 golf パス（228957→13299）も既存 12478 を ~6% 下回れず。algorithm-matched baseline。
+- **t174**: agent が「既存 9329 は wrong rule で実 LB 0 点」と主張 → **検証で誤りと判明**（現 task174 は
+  n_fail=0/266, 15.86pt で正答）。agent は targeting agent の loose "shift" ラベルと実装ネットを混同。
+  rebuild 28272 は −1.11 の退行 → REJECT。**agent の警告的主張は必ず faithful scorer で検証すべき**を再確認。
+wave-4 = **0/3**（t192 のみ実行中）。確定パターン: rebuild が勝つのは「素朴実装の高コストネット」のみ。
+既存 lean ネットには tie/負け。redesign の残 ROI はごく僅か。dsl harvest（凍結中）が依然主力。
+
+### E41 補遺: t192 も tie (8628 vs 8621) → wave-4 = 0/4 確定、redesign 枯渇
+
+t192 は 265/265 正答だが 8628 > 8621（-0.0008）= 既存 lean ネットと実質同値 → REJECT。
+**wave-4 最終 0/4**（t064/t162/t174/t192）。redesign は完全に勝ち筋を掘り尽くした:
+直近の全ターゲットが既に golf 済の lean ネット（dsl/コミュニティが最適化済）。
+勝利は初期の naive-net タスク（t002/t202/t359/t364/t076/t187, 計6・~+0.35）に集中、現在は枯渇。
+**戦略最終確定**: redesign 停止。残る唯一のレバーは dsl harvest（+1.23 実績）だが 5時間以上凍結中。
+本セッション総括: 7166.10 → **7172.43（+6.33）**。全レバー網羅的に採掘済。7665（−492.6）は
+構造下限・コミュニティ収束（~7172）の証拠から現行手法では到達不能。loop は dsl-harvest-watch として維持。
+
+## E42: onnx-compiler worktree も harvest → 0 wins（全 worktree 横断で combined_best が最適確定）
+
+dsl が枯渇したため、未スキャンだった **onnx-compiler worktree**（9 bundle dir: case3_convgolf/dtypegolf/
+lossless/blend8/combined_safe 等 + 23 個別 golf variant in _case3_tmp）を harvest。**0 wins**。
+→ combined_best は onnx-compiler の全 golf 実験を既に上回る（dsl wins の方が良く、harvest 済）。
+**確定**: combined_best は **全 3 worktree（dsl + onnx-compiler + 自分）横断で各タスク最良版を集約済**の
+team-wide optimum（7172.43）。harvestable な未取得 source は存在しない。
+全レバー（dsl harvest, onnx-compiler harvest, redesign, surgery）を網羅的に採掘完了。
