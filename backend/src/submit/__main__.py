@@ -30,8 +30,10 @@ app = typer.Typer(
 )
 console = Console()
 
-DEFAULT_ONNX_DIR = Path("data/output/onnx")
-DEFAULT_OUTPUT_DIR = Path("data/output/submit")
+# DVC は repo-root の data/output/onnx に pull するため、backend cwd
+# （python -m submit の実行位置）からは ../data/output/onnx を指す。
+DEFAULT_ONNX_DIR = Path("../data/output/onnx")
+DEFAULT_OUTPUT_DIR = Path("../data/output/submit")
 
 
 def _validations_table(results: list[TaskValidation]) -> Table:

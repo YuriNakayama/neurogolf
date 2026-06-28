@@ -12,6 +12,10 @@
 #   2. submit は kaggle CLI 経由（src/submit/kaggle_api.py の subprocess）で
 #      行う。Python SDK の api.competition_submit() は participate スコープの
 #      quirk で 403 になることがあるため使わない。
+#   3. 提出対象 ONNX は repo-root の data/output/onnx（DVC 管理）。本ラッパーは
+#      submit/validate の前に必ず `dvc pull` で remote から最新 floor を取得
+#      する（失敗時は中止）。python -m submit の既定 --onnx-dir も
+#      ../data/output/onnx（backend cwd 相対で repo-root を指す）。
 #
 # Usage:
 #   dev/submit -m "初回提出"                       # data/output/onnx を提出
@@ -21,7 +25,8 @@
 #   dev/submit validate                            # 検証だけ（コスト/スコア表示）
 set -euo pipefail
 
-cd "$(dirname "$0")/../backend"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${ROOT_DIR}/backend"
 
 if [ $# -lt 1 ]; then
   cat <<'EOS'
@@ -29,24 +34,36 @@ Usage: dev/submit -m "<message>" [オプション]
        dev/submit validate [--onnx-dir DIR]
 
   -m, --message TEXT   提出メッセージ (submit 時は必須)
-  --onnx-dir DIR       taskNNN.onnx を収めたディレクトリ (既定: data/output/onnx)
-  --output-dir DIR     submission.zip 生成先 (既定: data/output/submit)
+  --onnx-dir DIR       taskNNN.onnx を収めたディレクトリ (既定: ../data/output/onnx)
+  --output-dir DIR     submission.zip 生成先 (既定: ../data/output/submit)
   --dry-run            検証と submission.zip 生成のみ (Kaggle へは投げない)
   --wait               提出後に validation 結果をポーリング
 
 Examples:
   dev/submit -m "identity + recolor baseline"
   dev/submit -m "dry run" --dry-run
-  dev/submit validate --onnx-dir data/output/onnx
+  dev/submit validate
 EOS
   exit 1
 fi
 
-# 第一引数がサブコマンド (validate/submissions) ならそのまま委譲。
+# submit/validate は ONNX を要する。DVC remote から最新 floor を取得する。
+# .dvc/ は repo-root にあるため repo-root で実行。失敗時は中止（最新提出を保証）。
+dvc_pull_onnx() {
+  echo "== dvc pull data/output/onnx =="
+  (cd "${ROOT_DIR}" && uv --project backend run dvc pull data/output/onnx)
+}
+
 case "${1:-}" in
-  validate | submissions)
+  submissions)
+    # 提出一覧のみ。ONNX 不要なので pull しない。
+    exec uv run python -m submit submissions
+    ;;
+  validate)
+    dvc_pull_onnx
     exec uv run python -m submit "$@"
     ;;
 esac
 
+dvc_pull_onnx
 exec uv run python -m submit submit "$@"
