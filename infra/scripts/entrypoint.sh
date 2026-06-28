@@ -88,6 +88,28 @@ prepare_workspace() {
   # backend 依存をワークツリーで解決（イメージの uv キャッシュを再利用）。
   (cd "${WORK_DIR}/backend" && uv sync --locked --no-dev >/dev/null 2>&1) || \
     log_warn "uv sync in workspace failed; relying on image deps"
+  trust_workspace
+}
+
+# Claude Code は未信頼ワークスペースの .claude/settings.json の permissions を
+# 無視する（headless では trust dialog を出せない）。clone 先を信頼済みとして
+# ~/.claude.json に登録し、permissions.allow を有効化する。
+trust_workspace() {
+  local cfg="${HOME}/.claude.json"
+  local existing="{}"
+  [[ -f "${cfg}" ]] && existing="$(cat "${cfg}")"
+  printf '%s' "${existing}" | python3 -c '
+import json, sys, os
+work = os.environ["WORK_DIR"]
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+d.setdefault("projects", {}).setdefault(work, {})["hasTrustDialogAccepted"] = True
+json.dump(d, sys.stdout)
+' >"${cfg}.tmp" 2>/dev/null && mv "${cfg}.tmp" "${cfg}" \
+    && log_info "trusted workspace ${WORK_DIR}" \
+    || log_warn "failed to mark workspace trusted"
 }
 
 main() {
@@ -95,13 +117,13 @@ main() {
   log_init "${MODE}"
   log_info "entrypoint mode=${MODE} starting"
 
+  export WORK_DIR
   init_git_identity
   if ! prepare_workspace; then
     log_error "workspace preparation failed; aborting"
     log_sync
     exit 70
   fi
-  export WORK_DIR
 
   case "${MODE}" in
     loop)
