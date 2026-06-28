@@ -130,6 +130,20 @@ data "aws_iam_policy_document" "task" {
     }
   }
 
+  # ECS Exec（aws ecs execute-command）でコンテナへ対話接続するための SSM
+  # messaging チャネル。任意 SSM アクセスではなく、exec セッション確立に必要な
+  # 4 アクションのみ。デバッグ用に有効化。
+  statement {
+    sid = "EcsExecSsmMessages"
+    actions = [
+      "ssmmessages:CreateControlChannel",
+      "ssmmessages:CreateDataChannel",
+      "ssmmessages:OpenControlChannel",
+      "ssmmessages:OpenDataChannel",
+    ]
+    resources = ["*"]
+  }
+
   # NOTE: シークレットは execution role 経由で task definition の `secrets` として
   # コンテナに注入される。task role には SSM 読取 / kms:Decrypt を **付与しない**
   # （headless Claude が Bash で任意実行できるため、攻撃面を最小化する）。

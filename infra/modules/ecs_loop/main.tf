@@ -80,6 +80,9 @@ resource "aws_ecs_service" "loop" {
   task_definition = aws_ecs_task_definition.loop.arn
   desired_count   = 1
 
+  # ECS Exec（aws ecs execute-command）でコンテナへ対話接続できるようにする。
+  enable_execute_command = true
+
   capacity_provider_strategy {
     capacity_provider = "FARGATE_SPOT"
     weight            = 1
