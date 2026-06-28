@@ -239,3 +239,104 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── hollow_fill ──────────────────────────────────────────────────────────────
+
+
+def test_solve_hollow_fill_simple() -> None:
+    """5x5: wall=2 が囲む内側 0 を fill=3 に塗り, wall=2 が 0 に消える。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 2, 2, 2, 0],
+        [0, 2, 0, 2, 0],
+        [0, 2, 2, 2, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 3, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_hollow_fill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_hollow_fill_larger() -> None:
+    """7x7: wall=4, fill=6 の hollow_fill。"""
+    inp = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 4, 4, 4, 4, 4, 0],
+        [0, 4, 0, 0, 0, 4, 0],
+        [0, 4, 0, 0, 0, 4, 0],
+        [0, 4, 0, 0, 0, 4, 0],
+        [0, 4, 4, 4, 4, 4, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 6, 6, 6, 0, 0],
+        [0, 0, 6, 6, 6, 0, 0],
+        [0, 0, 6, 6, 6, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_hollow_fill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_hollow_fill_not_applicable_returns_none() -> None:
+    """非 hollow_fill タスク (単純 identity) は None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_hollow_fill(_task(g, g)) is None
+
+
+def test_solve_hollow_fill_regular_floodfill_returns_none() -> None:
+    """通常の flood-fill (wall が残る) は hollow_fill ではない。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 0, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 2, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    assert solvers.solve_hollow_fill(_task(inp, out)) is None
+
+
+def test_solve_hollow_fill_cost_below_frank() -> None:
+    """hollow_fill の生成コストが frank7166 の task338 実測コスト 17943 未満であること。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 2, 2, 2, 0],
+        [0, 2, 0, 2, 0],
+        [0, 2, 2, 2, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 3, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_hollow_fill(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["cost"] is not None
+    assert res["cost"] < 17943

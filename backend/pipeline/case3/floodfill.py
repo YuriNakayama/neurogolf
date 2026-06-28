@@ -271,6 +271,201 @@ def _min_8conn_steps(examples: tuple[Example, ...]) -> int:
     return max_depth
 
 
+# ---------------------------------------------------------------------------
+# hollow_fill: wall→0 + enclosed_bg→fill（壁が消えて内側を塗る）
+# ---------------------------------------------------------------------------
+
+
+def _detect_hollow_fill(examples: tuple[Example, ...]) -> tuple[int, int] | None:
+    """(wall_color, fill_color) を全 example から推定。hollow_fill 規則に合致すれば返す。
+
+    規則: 入力は 0 と wall_color のみ。変化セルは wall→0（壁消滅）か 0→fill（内側塗り）。
+    border-reachable でない 0-cells が fill になり、wall cells が 0 になる。
+    """
+    wall_colors: set[int] = set()
+    fill_colors: set[int] = set()
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        b = np.array(e.output, dtype=np.int64)
+        if a.shape != b.shape:
+            return None
+        diff = a != b
+        if not diff.any():
+            continue
+        pairs = set(zip(a[diff].tolist(), b[diff].tolist(), strict=True))
+        for av, bv in pairs:
+            if bv == 0:
+                wall_colors.add(int(av))
+            elif av == 0:
+                fill_colors.add(int(bv))
+            else:
+                return None
+    if len(wall_colors) != 1 or len(fill_colors) != 1:
+        return None
+    wall = wall_colors.pop()
+    fill = fill_colors.pop()
+    if wall == 0 or fill == 0 or wall == fill:
+        return None
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        if not set(np.unique(a).tolist()).issubset({0, wall}):
+            return None
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        b = np.array(e.output, dtype=np.int64)
+        free = a != wall
+        reach = _border_reachable(free)
+        interior = free & (a == 0) & ~reach
+        expected = a.copy()
+        expected[a == wall] = 0
+        expected[interior] = fill
+        if not np.array_equal(expected, b):
+            return None
+    return wall, fill
+
+
+def _min_8conn_steps_hollow(examples: tuple[Example, ...], wall: int) -> int:
+    """wall を除く free セルに対して 8 連結 BFS で境界到達に必要な最小ステップ数。"""
+    max_depth = 0
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        h, w = a.shape
+        free = a != wall
+        dist: np.ndarray = np.full((h, w), -1, dtype=np.int64)
+        dq: deque[tuple[int, int]] = deque()
+        for r in range(h):
+            for c in range(w):
+                if free[r, c] and (r == 0 or r == h - 1 or c == 0 or c == w - 1):
+                    dist[r, c] = 0
+                    dq.append((r, c))
+        while dq:
+            r, c = dq.popleft()
+            for dr in range(-1, 2):
+                for dc in range(-1, 2):
+                    if dr == 0 and dc == 0:
+                        continue
+                    nr, nc = r + dr, c + dc
+                    if (
+                        0 <= nr < h
+                        and 0 <= nc < w
+                        and free[nr, nc]
+                        and dist[nr, nc] == -1
+                    ):
+                        dist[nr, nc] = dist[r, c] + 1
+                        dq.append((nr, nc))
+        reachable = dist[dist >= 0]
+        if reachable.size > 0:
+            max_depth = max(max_depth, int(reachable.max()))
+    return max_depth
+
+
+def build_hollow_fill(
+    examples: tuple[Example, ...], n_steps: int | None = None
+) -> onnx.ModelProto | None:
+    """hollow_fill ONNX を構築: wall→0, enclosed_bg→fill。解けなければ None。
+
+    8 連結 MaxPool [3,3] で境界シードを伝播（Chebyshev BFS）。UINT8 中間で cost 最小化。
+
+    出力チャネル構成:
+      ch0 = Add(Mul(ch0_u8, reach), ch_wall_u8)
+            border-reach bg セル + wall セル（→ 共に color 0 へ）
+      ch_fill = Mul(ch0_u8, Sub(free, reach)) = 囲まれた bg セル
+    OOB セルは ch0_u8=0 なので全チャネル 0 となり zero-hot を保つ。
+    """
+    det = _detect_hollow_fill(examples)
+    if det is None:
+        return None
+    wall, fill = det
+    m = _max_dim(examples)
+    if m < 3:
+        return None
+
+    steps = n_steps if n_steps is not None else _min_8conn_steps_hollow(examples, wall)
+
+    nodes: list[onnx.NodeProto] = []
+    inits: list[onnx.TensorProto] = []
+
+    inits += [
+        helper.make_tensor("ax", _I64, [3], [1, 2, 3]),
+        helper.make_tensor("s0", _I64, [3], [0, 0, 0]),
+        helper.make_tensor("e0", _I64, [3], [1, m, m]),
+        helper.make_tensor("s_wall", _I64, [3], [wall, 0, 0]),
+        helper.make_tensor("e_wall", _I64, [3], [wall + 1, m, m]),
+    ]
+    nodes.append(helper.make_node("Slice", ["input", "s0", "e0", "ax"], ["ch0_f"]))
+    nodes.append(
+        helper.make_node("Slice", ["input", "s_wall", "e_wall", "ax"], ["ch_wall_f"])
+    )
+    nodes.append(helper.make_node("Cast", ["ch0_f"], ["ch0_u8"], to=_U8))
+    nodes.append(helper.make_node("Cast", ["ch_wall_f"], ["ch_wall_u8"], to=_U8))
+
+    inits.append(helper.make_tensor("one_u8", _U8, [], [1]))
+    nodes.append(helper.make_node("Sub", ["one_u8", "ch_wall_u8"], ["free"]))
+
+    bm = np.zeros((1, 1, m, m), dtype=np.uint8)
+    bm[0, 0, 0, :] = 1
+    bm[0, 0, -1, :] = 1
+    bm[0, 0, :, 0] = 1
+    bm[0, 0, :, -1] = 1
+    inits.append(helper.make_tensor("bseed", _U8, [1, 1, m, m], bm.flatten().tolist()))
+    nodes.append(helper.make_node("Mul", ["free", "bseed"], ["ext0"]))
+
+    cur = "ext0"
+    for k in range(steps):
+        mp = f"mp{k}"
+        nxt = f"ext{k + 1}"
+        nodes.append(
+            helper.make_node(
+                "MaxPool",
+                [cur],
+                [mp],
+                kernel_shape=[3, 3],
+                pads=[1, 1, 1, 1],
+                strides=[1, 1],
+            )
+        )
+        nodes.append(helper.make_node("Mul", [mp, "free"], [nxt]))
+        cur = nxt
+
+    # interior = ch0_u8 * (free - reach): 囲まれた bg セル
+    nodes.append(helper.make_node("Sub", ["free", cur], ["fmr"]))
+    nodes.append(helper.make_node("Mul", ["ch0_u8", "fmr"], ["interior"]))
+
+    # ch0_out = bg_reach + ch_wall_u8: border-reach bg + wall（どちらも出力 color 0）
+    nodes.append(helper.make_node("Mul", ["ch0_u8", cur], ["bg_reach"]))
+    nodes.append(helper.make_node("Add", ["bg_reach", "ch_wall_u8"], ["ch0_out"]))
+
+    need_z0 = fill > 1
+    if need_z0:
+        nodes.append(helper.make_node("Sub", ["ch0_u8", "ch0_u8"], ["z0"]))
+
+    concat_inputs: list[str] = ["ch0_out"]
+    for _ in range(1, fill):
+        concat_inputs.append("z0")
+    concat_inputs.append("interior")
+
+    n_concat = fill + 1
+    nodes.append(helper.make_node("Concat", concat_inputs, ["small"], axis=1))
+
+    pad_cfg = [0, 0, 0, 0, 0, NUM_COLORS - n_concat, GRID - m, GRID - m]
+    inits += [
+        helper.make_tensor("padcfg", _I64, [8], pad_cfg),
+        helper.make_tensor("zero_u8", _U8, [], [0]),
+    ]
+    nodes.append(
+        helper.make_node(
+            "Pad", ["small", "padcfg", "zero_u8"], ["output"], mode="constant"
+        )
+    )
+
+    x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
+    y = helper.make_tensor_value_info("output", _U8, GRID_SHAPE)
+    graph = helper.make_graph(nodes, "hollow_fill", [x], [y], inits)
+    return helper.make_model(
+        graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
+    )
+
+
 def build_floodfill_8conn(
     examples: tuple[Example, ...], n_steps: int | None = None
 ) -> onnx.ModelProto | None:
