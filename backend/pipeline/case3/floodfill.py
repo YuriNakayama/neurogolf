@@ -236,6 +236,50 @@ def _find_line_color(examples: tuple[Example, ...], fill: int) -> int | None:
     return colors.pop()
 
 
+def _maxpool_v(x: np.ndarray) -> np.ndarray:
+    """MaxPool[3,1] (縦方向 3×1、ゼロパッド) を NumPy で実装。"""
+    padded = np.pad(x, ((1, 1), (0, 0)))
+    return np.maximum(padded[:-2], np.maximum(x, padded[2:]))
+
+
+def _maxpool_h(x: np.ndarray) -> np.ndarray:
+    """MaxPool[1,3] (横方向 1×3、ゼロパッド) を NumPy で実装。"""
+    padded = np.pad(x, ((0, 0), (1, 1)))
+    return np.maximum(padded[:, :-2], np.maximum(x, padded[:, 2:]))
+
+
+def _min_altVH_steps_sim(
+    examples: tuple[Example, ...], m: int, line_color: int
+) -> int:
+    """alternating V/H 伝播のシミュレーションで収束に必要な最小ステップ数を求める。
+
+    8 連結 BFS とは異なり、壁セルが対角伝播を遮断する正確な収束ステップを返す。
+    """
+    max_steps = 0
+    for e in examples:
+        arr = np.array(e.input, dtype=np.float32)
+        h, w = arr.shape
+        padded = np.zeros((m, m), dtype=np.float32)
+        padded[:h, :w] = arr
+        free = (padded != line_color).astype(np.float32)
+        bm = np.zeros((m, m), dtype=np.float32)
+        bm[0, :] = 1
+        bm[-1, :] = 1
+        bm[:, 0] = 1
+        bm[:, -1] = 1
+        reach = bm * free
+        steps = 0
+        for _ in range(4 * m + 1):
+            vm = _maxpool_v(reach) * free
+            new_reach = _maxpool_h(vm) * free
+            if np.array_equal(new_reach, reach):
+                break
+            reach = new_reach
+            steps += 1
+        max_steps = max(max_steps, steps)
+    return max_steps
+
+
 def _min_8conn_steps(examples: tuple[Example, ...]) -> int:
     """外周から 8 連結 BFS で border-reachable 自由セル全体に到達するのに必要な最小ステップ数。"""
     max_depth = 0
@@ -387,6 +431,120 @@ def build_floodfill_8conn(
     x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
     y = helper.make_tensor_value_info("output", _U8, GRID_SHAPE)
     graph = helper.make_graph(nodes, "floodfill8", [x], [y], inits)
+    return helper.make_model(
+        graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
+    )
+
+
+# ---------------------------------------------------------------------------
+# alternating V/H UINT8 flood-fill (対角壁対応版)
+# ---------------------------------------------------------------------------
+
+
+def build_floodfill_altVH_uint8(
+    examples: tuple[Example, ...], n_steps: int | None = None
+) -> onnx.ModelProto | None:
+    """alternating V→H UINT8 border flood-fill ONNX を構築（対角壁対応）。
+
+    8 連結 MaxPool[3,3] の代わりに MaxPool[3,1]→Mul→MaxPool[1,3]→Mul を交互に適用。
+    対角壁（菱形 cage 等）を正しく遮断し、4 連結と同じ enclosed 領域を検出する。
+    ステップ数は NumPy シミュレーションで収束まで測定。
+    """
+    det = _detect(examples)
+    if det is None:
+        return None
+    _, fill = det
+    line = _find_line_color(examples, fill)
+    if line is None or line == fill:
+        return None
+
+    m = _max_dim(examples)
+    if m < 3:
+        return None
+
+    steps = n_steps if n_steps is not None else _min_altVH_steps_sim(examples, m, line)
+
+    nodes: list[onnx.NodeProto] = []
+    inits: list[onnx.TensorProto] = []
+
+    inits += [
+        helper.make_tensor("ax", _I64, [3], [1, 2, 3]),
+        helper.make_tensor("s0", _I64, [3], [0, 0, 0]),
+        helper.make_tensor("e0", _I64, [3], [1, m, m]),
+        helper.make_tensor("sL", _I64, [3], [line, 0, 0]),
+        helper.make_tensor("eL", _I64, [3], [line + 1, m, m]),
+        helper.make_tensor("one_u8", _U8, [], [1]),
+    ]
+
+    nodes.append(helper.make_node("Slice", ["input", "s0", "e0", "ax"], ["c0_f"]))
+    nodes.append(helper.make_node("Slice", ["input", "sL", "eL", "ax"], ["cL_f"]))
+    nodes.append(helper.make_node("Cast", ["c0_f"], ["color0"], to=_U8))
+    nodes.append(helper.make_node("Cast", ["cL_f"], ["colorL"], to=_U8))
+    nodes.append(helper.make_node("Sub", ["one_u8", "colorL"], ["free"]))
+
+    bm = np.zeros((1, 1, m, m), dtype=np.uint8)
+    bm[0, 0, 0, :] = 1
+    bm[0, 0, -1, :] = 1
+    bm[0, 0, :, 0] = 1
+    bm[0, 0, :, -1] = 1
+    inits.append(helper.make_tensor("seed", _U8, [1, 1, m, m], bm.flatten().tolist()))
+    nodes.append(helper.make_node("Mul", ["free", "seed"], ["ext0"]))
+
+    cur = "ext0"
+    for k in range(steps):
+        vp, vm, hp, nxt = f"vp{k}", f"vm{k}", f"hp{k}", f"ext{k + 1}"
+        nodes.append(
+            helper.make_node(
+                "MaxPool", [cur], [vp],
+                kernel_shape=[3, 1], pads=[1, 0, 1, 0], strides=[1, 1],
+            )
+        )
+        nodes.append(helper.make_node("Mul", [vp, "free"], [vm]))
+        nodes.append(
+            helper.make_node(
+                "MaxPool", [vm], [hp],
+                kernel_shape=[1, 3], pads=[0, 1, 0, 1], strides=[1, 1],
+            )
+        )
+        nodes.append(helper.make_node("Mul", [hp, "free"], [nxt]))
+        cur = nxt
+
+    nodes.append(helper.make_node("Sub", ["free", cur], ["interior"]))
+    nodes.append(helper.make_node("Mul", ["color0", cur], ["out_bg"]))
+
+    max_ch = max(line, fill)
+    need_z0 = any(k != 0 and k != fill and k != line for k in range(1, max_ch + 1))
+    if need_z0:
+        nodes.append(helper.make_node("Sub", ["free", "free"], ["z0"]))
+
+    concat_inputs: list[str] = []
+    for k in range(max_ch + 1):
+        if k == 0:
+            concat_inputs.append("out_bg")
+        elif k == fill:
+            concat_inputs.append("interior")
+        elif k == line:
+            concat_inputs.append("colorL")
+        else:
+            concat_inputs.append("z0")
+
+    n_concat = max_ch + 1
+    nodes.append(helper.make_node("Concat", concat_inputs, ["small"], axis=1))
+
+    pad_cfg = [0, 0, 0, 0, 0, NUM_COLORS - n_concat, GRID - m, GRID - m]
+    inits += [
+        helper.make_tensor("padcfg", _I64, [8], pad_cfg),
+        helper.make_tensor("zero_u8", _U8, [], [0]),
+    ]
+    nodes.append(
+        helper.make_node(
+            "Pad", ["small", "padcfg", "zero_u8"], ["output"], mode="constant"
+        )
+    )
+
+    x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
+    y = helper.make_tensor_value_info("output", _U8, GRID_SHAPE)
+    graph = helper.make_graph(nodes, "floodfill_altVH", [x], [y], inits)
     return helper.make_model(
         graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
     )
