@@ -15,13 +15,20 @@
 #   dev/ecs-connect                       # loop コンテナに bash で接続
 #   dev/ecs-connect submit                # submit タスク（短命・稼働中のみ）に接続
 #   dev/ecs-connect -- <cmd...>           # 対話せず一発コマンドを実行
-#   dev/ecs-connect loop -- ls /app/loop  # サービス指定 + 一発コマンド
+#   dev/ecs-connect loop -- git status    # サービス指定 + 一発コマンド
+#
+# 着地点は実コードのある作業ツリー（既定 /work/neurogolf、ECS_WORK_DIR で上書き
+# 可）。bash も一発コマンドもここを cwd として開始する。未 clone 時は /app へ
+# フォールバックし警告を出す。
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 CLUSTER="neurogolf"
 REGION="${AWS_REGION:-ap-northeast-1}"
 CONTAINER="loop"   # どちらのタスク定義もコンテナ名は "loop"
+# 着地点。イメージの静的コピー(/app)ではなく、loop が実行時 clone した本物の
+# 作業ツリー(git/dvc/data 入り)で開く。未 clone なら /app にフォールバック。
+WORK_DIR="${ECS_WORK_DIR:-/work/neurogolf}"
 
 # --- 引数パース: [service] [-- cmd...] ---------------------------------------
 SERVICE="loop"          # loop | submit
@@ -80,15 +87,26 @@ if [ "${EXEC_OK}" != "True" ]; then
   exit 1
 fi
 
-echo "==> ${SERVICE} task ${TASK_ID} に接続します" >&2
+echo "==> ${SERVICE} task ${TASK_ID} に接続します（cwd=${WORK_DIR}）" >&2
+
+# --- 着地点への cd を仕込む --------------------------------------------------
+# 作業ツリーが存在すればそこへ cd、無ければ /app へフォールバックして警告。
+# どちらの経路（bash / 一発コマンド）でも共通の前置きとして使う。
+# 注意: この前置きは外側 --command の '...' 内に埋め込まれるため、内部では
+# シングルクォートを使えない（クォートが閉じてしまう）。ダブルクォートを使う。
+# ${WORK_DIR} はこのローカル展開で確定値を焼き込む。
+cd_prelude="if [ -d \"${WORK_DIR}\" ]; then cd \"${WORK_DIR}\"; \
+else echo \"warn: ${WORK_DIR} が無いため /app で開始（clone 未完了の可能性）\" >&2; cd /app; fi;"
 
 # --- 接続 -------------------------------------------------------------------
 if [ "${#ONESHOT_CMD[@]}" -gt 0 ]; then
   exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
     --task "${TASK_ARN}" --container "${CONTAINER}" \
-    --command "/bin/sh -c '$(printf '%s ' "${ONESHOT_CMD[@]}")'" --interactive
+    --command "/bin/sh -c '${cd_prelude} $(printf '%s ' "${ONESHOT_CMD[@]}")'" --interactive
 else
+  # cd してから interactive bash へ exec で差し替える。新 shell は通常どおり
+  # rc を読み、cwd は作業ツリーになる（process substitution 等の脆い手は避ける）。
   exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
     --task "${TASK_ARN}" --container "${CONTAINER}" \
-    --command "/bin/bash" --interactive
+    --command "/bin/bash -c '${cd_prelude} exec bash -i'" --interactive
 fi
