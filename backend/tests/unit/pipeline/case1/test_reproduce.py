@@ -15,7 +15,9 @@ def _make_zip(path: Path, content: bytes) -> Path:
     return path
 
 
-def test_verify_bundle_accepts_matching_digest(tmp_path: Path, monkeypatch) -> None:
+def test_verify_bundle_accepts_matching_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     content = b"matching-bundle-bytes"
     zp = _make_zip(tmp_path / "submission.zip", content)
     monkeypatch.setattr(
@@ -39,7 +41,7 @@ def test_verify_bundle_missing_file(tmp_path: Path) -> None:
 
 
 def test_resolve_target_uses_local_zip_without_fetch(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     content = b"local"
     zp = _make_zip(tmp_path / "submission.zip", content)
@@ -63,10 +65,12 @@ def test_reached_tolerance() -> None:
     assert not submit_loop.reached(None, 7166.06)
 
 
-def test_run_until_target_stops_on_success(monkeypatch) -> None:
+def test_run_until_target_stops_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts: list[str] = []
 
-    def fake_submit_once(zip_path, message, **kw) -> submit_loop.SubmitOutcome:
+    def fake_submit_once(
+        zip_path: str | Path, message: str, **kw: object
+    ) -> submit_loop.SubmitOutcome:
         attempts.append(message)
         return submit_loop.SubmitOutcome(
             submitted=True, status="complete", public_score=7166.06, raw=""
@@ -80,10 +84,14 @@ def test_run_until_target_stops_on_success(monkeypatch) -> None:
     assert len(attempts) == 1  # stopped immediately on success
 
 
-def test_run_until_target_exhausts_attempts(monkeypatch) -> None:
+def test_run_until_target_exhausts_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     attempts: list[str] = []
 
-    def fake_submit_once(zip_path, message, **kw) -> submit_loop.SubmitOutcome:
+    def fake_submit_once(
+        zip_path: str | Path, message: str, **kw: object
+    ) -> submit_loop.SubmitOutcome:
         attempts.append(message)
         return submit_loop.SubmitOutcome(
             submitted=True, status="complete", public_score=10.0, raw=""
