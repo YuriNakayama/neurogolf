@@ -1,0 +1,362 @@
+[
+  {
+    "task": 233,
+    "cost": 70606,
+    "pts": 13.84,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 7
+  },
+  {
+    "task": 18,
+    "cost": 66319,
+    "pts": 13.9,
+    "sameshape": true,
+    "change_frac": 0.083,
+    "bg_only": false,
+    "ncolors": 7
+  },
+  {
+    "task": 286,
+    "cost": 52019,
+    "pts": 14.14,
+    "sameshape": true,
+    "change_frac": 0.209,
+    "bg_only": true,
+    "ncolors": 6
+  },
+  {
+    "task": 209,
+    "cost": 51161,
+    "pts": 14.16,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 6
+  },
+  {
+    "task": 187,
+    "cost": 46809,
+    "pts": 14.25,
+    "sameshape": true,
+    "change_frac": 0.794,
+    "bg_only": true,
+    "ncolors": 5
+  },
+  {
+    "task": 118,
+    "cost": 42418,
+    "pts": 14.34,
+    "sameshape": true,
+    "change_frac": 0.026,
+    "bg_only": false,
+    "ncolors": 3
+  },
+  {
+    "task": 2,
+    "cost": 40116,
+    "pts": 14.4,
+    "sameshape": true,
+    "change_frac": 0.063,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 349,
+    "cost": 38996,
+    "pts": 14.43,
+    "sameshape": true,
+    "change_frac": 0.468,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 366,
+    "cost": 37446,
+    "pts": 14.47,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 7
+  },
+  {
+    "task": 191,
+    "cost": 35425,
+    "pts": 14.52,
+    "sameshape": true,
+    "change_frac": 0.058,
+    "bg_only": true,
+    "ncolors": 3
+  },
+  {
+    "task": 158,
+    "cost": 35396,
+    "pts": 14.53,
+    "sameshape": true,
+    "change_frac": 0.083,
+    "bg_only": false,
+    "ncolors": 6
+  },
+  {
+    "task": 133,
+    "cost": 33582,
+    "pts": 14.58,
+    "sameshape": true,
+    "change_frac": 0.115,
+    "bg_only": true,
+    "ncolors": 7
+  },
+  {
+    "task": 54,
+    "cost": 27133,
+    "pts": 14.79,
+    "sameshape": true,
+    "change_frac": 0.086,
+    "bg_only": false,
+    "ncolors": 7
+  },
+  {
+    "task": 364,
+    "cost": 26974,
+    "pts": 14.8,
+    "sameshape": true,
+    "change_frac": 0.183,
+    "bg_only": false,
+    "ncolors": 2
+  },
+  {
+    "task": 367,
+    "cost": 26903,
+    "pts": 14.8,
+    "sameshape": true,
+    "change_frac": 0.066,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 219,
+    "cost": 26217,
+    "pts": 14.83,
+    "sameshape": true,
+    "change_frac": 0.093,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 76,
+    "cost": 25678,
+    "pts": 14.85,
+    "sameshape": true,
+    "change_frac": 0.05,
+    "bg_only": true,
+    "ncolors": 5
+  },
+  {
+    "task": 285,
+    "cost": 25632,
+    "pts": 14.85,
+    "sameshape": true,
+    "change_frac": 0.065,
+    "bg_only": true,
+    "ncolors": 8
+  },
+  {
+    "task": 255,
+    "cost": 25121,
+    "pts": 14.87,
+    "sameshape": true,
+    "change_frac": 0.281,
+    "bg_only": true,
+    "ncolors": 5
+  },
+  {
+    "task": 173,
+    "cost": 23271,
+    "pts": 14.95,
+    "sameshape": true,
+    "change_frac": 0.035,
+    "bg_only": true,
+    "ncolors": 8
+  },
+  {
+    "task": 243,
+    "cost": 22652,
+    "pts": 14.97,
+    "sameshape": true,
+    "change_frac": 0.392,
+    "bg_only": true,
+    "ncolors": 10
+  },
+  {
+    "task": 319,
+    "cost": 22579,
+    "pts": 14.98,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 6
+  },
+  {
+    "task": 23,
+    "cost": 22386,
+    "pts": 14.98,
+    "sameshape": true,
+    "change_frac": 0.235,
+    "bg_only": false,
+    "ncolors": 2
+  },
+  {
+    "task": 202,
+    "cost": 22049,
+    "pts": 15.0,
+    "sameshape": true,
+    "change_frac": 0.064,
+    "bg_only": false,
+    "ncolors": 7
+  },
+  {
+    "task": 80,
+    "cost": 20616,
+    "pts": 15.07,
+    "sameshape": true,
+    "change_frac": 0.098,
+    "bg_only": true,
+    "ncolors": 6
+  },
+  {
+    "task": 205,
+    "cost": 19863,
+    "pts": 15.1,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 10
+  },
+  {
+    "task": 66,
+    "cost": 19807,
+    "pts": 15.11,
+    "sameshape": true,
+    "change_frac": 0.065,
+    "bg_only": true,
+    "ncolors": 4
+  },
+  {
+    "task": 338,
+    "cost": 17943,
+    "pts": 15.21,
+    "sameshape": true,
+    "change_frac": 0.251,
+    "bg_only": false,
+    "ncolors": 2
+  },
+  {
+    "task": 101,
+    "cost": 17925,
+    "pts": 15.21,
+    "sameshape": true,
+    "change_frac": 0.128,
+    "bg_only": true,
+    "ncolors": 3
+  },
+  {
+    "task": 198,
+    "cost": 17097,
+    "pts": 15.25,
+    "sameshape": true,
+    "change_frac": 0.714,
+    "bg_only": true,
+    "ncolors": 5
+  },
+  {
+    "task": 77,
+    "cost": 14874,
+    "pts": 15.39,
+    "sameshape": true,
+    "change_frac": 0.05,
+    "bg_only": false,
+    "ncolors": 6
+  },
+  {
+    "task": 138,
+    "cost": 14332,
+    "pts": 15.43,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 7
+  },
+  {
+    "task": 25,
+    "cost": 14267,
+    "pts": 15.43,
+    "sameshape": true,
+    "change_frac": 0.037,
+    "bg_only": false,
+    "ncolors": 6
+  },
+  {
+    "task": 55,
+    "cost": 13836,
+    "pts": 15.46,
+    "sameshape": true,
+    "change_frac": 0.428,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 110,
+    "cost": 13789,
+    "pts": 15.47,
+    "sameshape": true,
+    "change_frac": 0.089,
+    "bg_only": true,
+    "ncolors": 10
+  },
+  {
+    "task": 64,
+    "cost": 13436,
+    "pts": 15.49,
+    "sameshape": true,
+    "change_frac": 0.035,
+    "bg_only": false,
+    "ncolors": 6
+  },
+  {
+    "task": 145,
+    "cost": 13215,
+    "pts": 15.51,
+    "sameshape": true,
+    "change_frac": 0.412,
+    "bg_only": true,
+    "ncolors": 2
+  },
+  {
+    "task": 396,
+    "cost": 13144,
+    "pts": 15.52,
+    "sameshape": false,
+    "change_frac": 1.0,
+    "bg_only": true,
+    "ncolors": 6
+  },
+  {
+    "task": 17,
+    "cost": 12735,
+    "pts": 15.55,
+    "sameshape": true,
+    "change_frac": 0.132,
+    "bg_only": true,
+    "ncolors": 10
+  },
+  {
+    "task": 157,
+    "cost": 12707,
+    "pts": 15.55,
+    "sameshape": true,
+    "change_frac": 0.28,
+    "bg_only": false,
+    "ncolors": 3
+  }
+]

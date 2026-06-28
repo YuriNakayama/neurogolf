@@ -17,6 +17,10 @@ dependencies = [
     "numpy>=2.2.6",
     "onnx>=1.16.0",
     "onnxruntime>=1.17.0",
+    # ONNX graph 縮小 / 最適化 (case2/case3 の golf パス)。
+    "onnxconverter-common>=1.16.0",
+    "onnxslim>=0.1.94",
+    "onnxoptimizer>=0.4.2",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -32,6 +36,11 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     { include-group = "lint" },
+    # case3 の CNN 再導出 / onnx-script コンパイル系（dev 専用、提出物には不要）。
+    "onnxscript>=0.7.0",
+    "onnxsim>=0.6.5",
+    "scipy>=1.18.0",
+    "torch>=2.12.1",
 ]
 lint = [
     "mypy>=1.15.0",
@@ -89,6 +98,10 @@ max-complexity = 5
 [tool.ruff.lint.per-file-ignores]
 "src/submit/__main__.py" = ["B008"]  # typer は引数デフォルトで Option を呼ぶのが標準
 "pipeline/case1/__main__.py" = ["B008"]  # 同上（typer CLI）
+"pipeline/case2/__main__.py" = ["B008"]  # 同上（typer CLI）
+"pipeline/case3/__main__.py" = ["B008"]  # 同上（typer CLI）
+# case3 の docstring は日本語（全角）で 88 桁制限が CJK 幅により誤検知されるため E501 を緩和。
+"pipeline/case3/*.py" = ["E501"]
 # Test fixtures often need long inline literals; readability wins over 88-char limit.
 "tests/**/test_*.py" = ["E501"]
 

@@ -1,0 +1,4 @@
+
+# onnxruntime profiling artifacts from audit_one (scorer)
+audit_*.onnx_*.json
+*.onnx_*.json
