@@ -59,11 +59,36 @@ init_git_identity() {
   git config --global user.name "neurogolf-bot"
   git config --global user.email "bot@neurogolf.local"
   git config --global --add safe.directory "${WORK_DIR}"
+  # 任意の git 操作（clone 先以外の作業ツリーも含む）で dubious-ownership を
+  # 回避し、git が常に使えるようにする。
+  git config --global --add safe.directory '*'
   # gh はトークンを GH_TOKEN 環境変数から自動的に拾う。
   if [[ -n "${GH_TOKEN:-}" ]]; then
     git config --global \
       url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf \
       "https://github.com/"
+  fi
+}
+
+# --- kaggle CLI を常に直接使えるようにする ----------------------------------
+# kaggle / dvc は backend venv にインストールされる（uv sync）。bare `kaggle`
+# `dvc` でも動くよう venv を PATH に通し、さらに env 由来の資格情報を
+# ~/.kaggle/kaggle.json にも書き出す（CLI と `ensure_credentials()` の双方が
+# env / file のどちらでも解決できるようにする）。値はマスキング対象。
+init_kaggle_config() {
+  # backend venv を PATH 先頭へ（clone 後に存在）。
+  local venv_bin="${WORK_DIR}/backend/.venv/bin"
+  if [[ ":${PATH}:" != *":${venv_bin}:"* ]]; then
+    export PATH="${venv_bin}:${PATH}"
+  fi
+  if [[ -n "${KAGGLE_USERNAME:-}" && -n "${KAGGLE_KEY:-}" ]]; then
+    mkdir -p "${HOME}/.kaggle"
+    printf '{"username":"%s","key":"%s"}' \
+      "${KAGGLE_USERNAME}" "${KAGGLE_KEY}" >"${HOME}/.kaggle/kaggle.json"
+    chmod 600 "${HOME}/.kaggle/kaggle.json"
+    log_info "kaggle credentials configured (~/.kaggle/kaggle.json + PATH)"
+  else
+    log_warn "KAGGLE_USERNAME/KAGGLE_KEY missing; kaggle CLI will be unauthenticated"
   fi
 }
 
@@ -112,6 +137,43 @@ json.dump(d, sys.stdout)
     || log_warn "failed to mark workspace trusted"
 }
 
+# --- preflight: git / kaggle / dvc が実際に使えるか起動時に検証 -------------
+# 「ECS を立ち上げると常に git / kaggle submit / dvc が使える」ことを保証する。
+# clone 済み WORK_DIR を前提に各機能を能動的に叩く。失敗は明示ログを出し、
+# loop モードでは fail-fast（壊れた環境で延々空回りしない）、submit モードでは
+# 個々の前提（kaggle 必須）を呼び出し側で再確認する。
+preflight_check() {
+  local ok=0
+
+  # git: remote 認証が通り fetch 可能か。
+  if git -C "${WORK_DIR}" ls-remote origin HEAD >/dev/null 2>&1; then
+    log_info "preflight git: OK (remote reachable + authenticated)"
+  else
+    log_error "preflight git: FAIL (cannot ls-remote origin — check GH_TOKEN)"
+    ok=1
+  fi
+
+  # kaggle: CLI が PATH にあり、認証付きでコンペにアクセスできるか。
+  if (cd "${WORK_DIR}/backend" && kaggle competitions list -s neurogolf \
+      >/dev/null 2>&1); then
+    log_info "preflight kaggle: OK (CLI on PATH + authenticated)"
+  else
+    log_error "preflight kaggle: FAIL (kaggle CLI missing or unauthenticated)"
+    ok=1
+  fi
+
+  # dvc: remote 'storage' が設定され、IAM(task role)で到達できるか。
+  if (cd "${WORK_DIR}" && uv --project backend run dvc status -c -r storage \
+      >/dev/null 2>&1); then
+    log_info "preflight dvc: OK (remote 'storage' reachable via IAM)"
+  else
+    log_error "preflight dvc: FAIL (remote unreachable — check .dvc/config + task role)"
+    ok=1
+  fi
+
+  return "${ok}"
+}
+
 main() {
   init_secrets
   log_init "${MODE}"
@@ -123,6 +185,17 @@ main() {
     log_error "workspace preparation failed; aborting"
     log_sync
     exit 70
+  fi
+  # clone 後に kaggle / venv-PATH を整え、git / kaggle / dvc を検証する。
+  init_kaggle_config
+  if ! preflight_check; then
+    log_error "preflight failed: git/kaggle/dvc のいずれかが利用不可"
+    # loop は壊れた環境で空回りさせず終了（ECS が再起動を試みる）。
+    # submit は呼び出し側で kaggle 必須を再判定するため継続する。
+    if [[ "${MODE}" == "loop" ]]; then
+      log_sync
+      exit 71
+    fi
   fi
 
   case "${MODE}" in
