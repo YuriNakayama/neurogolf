@@ -131,3 +131,8 @@ def gravity_down(g: Grid) -> Grid:
 def keep_color(g: Grid, color: int) -> Grid:
     """Keep only ``color``; everything else becomes background 0."""
     return np.where(g == color, g, 0)
+
+
+def subgrid(g: Grid, h0: int, h1: int, w0: int, w1: int) -> Grid:
+    """Extract the subgrid at fixed coordinates ``[h0:h1, w0:w1]``."""
+    return g[h0:h1, w0:w1]

@@ -102,6 +102,35 @@ def _infer_recolor(pairs: list[ExamplePair]) -> list[int] | None:
     return perm
 
 
+def _infer_subgrid(pairs: list[ExamplePair]) -> tuple[int, int, int, int] | None:
+    """Infer a fixed crop region ``(h0, h1, w0, w1)`` constant across all pairs.
+
+    Returns the region if every output equals ``input[h0:h1, w0:w1]`` for the
+    same coordinates; None otherwise.
+    """
+    region: tuple[int, int, int, int] | None = None
+    for inp, out in pairs:
+        ih, iw = inp.shape
+        oh, ow = out.shape
+        if oh > ih or ow > iw:
+            return None
+        match: tuple[int, int, int, int] | None = None
+        for h0 in range(ih - oh + 1):
+            for w0 in range(iw - ow + 1):
+                if np.array_equal(inp[h0 : h0 + oh, w0 : w0 + ow], out):
+                    match = (h0, h0 + oh, w0, w0 + ow)
+                    break
+            if match is not None:
+                break
+        if match is None:
+            return None
+        if region is None:
+            region = match
+        elif region != match:
+            return None
+    return region
+
+
 def _infer_tile(pairs: list[ExamplePair]) -> tuple[int, int] | None:
     """Infer integer tile reps ``(rh, rw)`` constant across pairs, else None."""
     reps: set[tuple[int, int]] = set()
@@ -187,6 +216,12 @@ def solve(task_path: Path) -> Solution | None:
             return Solution("symmetrize_v", onnx_ops.symmetrize(h, w, ("v",)))
         if _matches(dsl.symmetrize_all, pairs):
             return Solution("symmetrize_all", onnx_ops.symmetrize(h, w, ("h", "v")))
+
+    # Fixed crop: extract the same rectangular region from every input.
+    crop = _infer_subgrid(pairs)
+    if crop is not None:
+        h0, h1, w0, w1 = crop
+        return Solution("subgrid", onnx_ops.subgrid(h0, h1, w0, w1))
 
     # Single-color keep (mask out all but one color + background).
     colors = {int(c) for inp, _ in pairs for c in np.unique(inp)} - {0}
