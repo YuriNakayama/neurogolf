@@ -239,3 +239,58 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── floodfill_altVH (alternating V/H — diagonal-wall-safe) ───────────────
+
+
+def test_solve_floodfill_altVH_diagonal_cage() -> None:
+    """菱形 cage (対角壁): 中心の囲まれたセルを正しく塗りつぶす。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 0, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 2, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_floodfill_altVH(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_floodfill_altVH_not_applicable_returns_none() -> None:
+    """非 flood-fill タスクは None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_floodfill_altVH(_task(g, g)) is None
+
+
+def test_solve_floodfill_altVH_cost_below_threshold() -> None:
+    """5×5 菱形 cage の cost < 5000。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 0, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 2, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    model = solvers.solve_floodfill_altVH(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["cost"] is not None
+    assert res["cost"] < 5000
