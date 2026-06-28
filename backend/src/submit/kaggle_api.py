@@ -11,11 +11,27 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from submit.packager import SUBMISSION_NAME
+
 COMPETITION = "neurogolf-2026"
 
 
 class KaggleCLIError(RuntimeError):
     """kaggle CLI 実行失敗。"""
+
+
+class SubmissionNameError(KaggleCLIError):
+    """提出ファイル名が `submission.zip` でない。
+
+    Kaggle は basename が厳密に `submission.zip` のファイルしか受理しない
+    （別名は Web/CLI とも "Submission files must be named submission.zip" で拒否）。
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"提出ファイル名は {SUBMISSION_NAME!r} である必要があります "
+            f"(指定: {name!r})。Kaggle は別名の zip を受理しません。"
+        )
 
 
 def _run(args: list[str]) -> str:
@@ -48,7 +64,13 @@ def submit(file_path: Path, message: str) -> str:
     アップロード完了を示す文字列を検出したら成功扱いにする。
     CLI 出力だけでは判断がつかない場合、呼び出し側で
     `confirm_submission()` を使って履歴 API で最終確認すること。
+
+    `file_path` の basename が `submission.zip` でなければ Kaggle に送る前に
+    `SubmissionNameError` を送出する（別名は Kaggle 側で拒否されるため）。
     """
+
+    if file_path.name != SUBMISSION_NAME:
+        raise SubmissionNameError(file_path.name)
 
     cmd = [
         "kaggle",

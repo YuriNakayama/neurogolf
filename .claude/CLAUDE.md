@@ -63,9 +63,12 @@ Per-task score is `max(1, 25 - ln(cost))` and is only earned when the network is
 |-----------|----------------|----------------------|
 | `.claude/rules/python.md` | `**/*.py` | Python conventions (type hints, naming, error handling, lint). Note: the "Agent Performance Conventions" section is inherited PTCG content pending rework — see `docs/develop/MIGRATION.md` |
 | `.claude/rules/data.md` | `data/**` | data/ 4-layer structure (lake/processed/mart/output). Note: selfplay/kaggle_episodes layer descriptions are inherited PTCG content pending rework |
+| `.claude/rules/backend/submit.md` | `backend/src/submit/**`, `dev/submit` | Kaggle submit conventions: zip must be named `submission.zip`, use the kaggle CLI path (not the SDK), LB-gated adoption, `dev/submit` usage |
+| `.claude/rules/backend/pipeline.md` | `backend/pipeline/**` | `pipeline/case<N>/` layout, case independence, relation to the official scorer |
+| `.claude/rules/backend/tests.md` | `backend/tests/**` | Pytest conventions, unit/integration/e2e classification |
 | `.claude/rules/security.md` | Always loaded | Commits, secrets, CI/CD |
 
-> The submit / pipeline / command / docs / infra rules from the PTCG template were removed in cleanup (their subjects — cabt submit, agent families, GPU command catalog, experiment workflow, Terraform — no longer exist here). NeuroGolf ONNX-submit and pipeline conventions will be re-authored per `docs/develop/MIGRATION.md`.
+> The pipeline / command / docs / infra rules from the PTCG template were removed in cleanup (their subjects — agent families, GPU command catalog, experiment workflow, Terraform — no longer exist here). NeuroGolf ONNX-submit conventions are re-authored in `.claude/rules/backend/submit.md`; remaining pipeline conventions are tracked per `docs/develop/MIGRATION.md`.
 
 ## Response Language And Interface
 

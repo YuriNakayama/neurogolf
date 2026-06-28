@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from submit import kaggle_api
+from submit.packager import SUBMISSION_NAME
 
 
 def test_extract_submission_id() -> None:
@@ -33,7 +36,7 @@ def test_submit_success(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> No
         return _FakeProc(0, stdout="Submission ID: 12345\n")
 
     monkeypatch.setattr("submit.kaggle_api.subprocess.run", fake_run)
-    out = kaggle_api.submit(__import__("pathlib").Path("main.py"), "msg")
+    out = kaggle_api.submit(Path(SUBMISSION_NAME), "msg")
     assert "12345" in out
     cmd = captured["cmd"]
     assert cmd[0] == "kaggle"
@@ -50,7 +53,24 @@ def test_submit_failure_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("submit.kaggle_api.subprocess.run", fake_run)
     with pytest.raises(kaggle_api.KaggleCLIError):
-        kaggle_api.submit(__import__("pathlib").Path("main.py"), "msg")
+        kaggle_api.submit(Path(SUBMISSION_NAME), "msg")
+
+
+def test_submit_rejects_wrong_filename(monkeypatch: pytest.MonkeyPatch) -> None:
+    """basename が submission.zip でなければ kaggle を呼ぶ前に弾く。"""
+
+    def fail_run(*_a: object, **_k: object) -> _FakeProc:  # pragma: no cover
+        raise AssertionError("kaggle CLI must not be invoked for a bad filename")
+
+    monkeypatch.setattr("submit.kaggle_api.subprocess.run", fail_run)
+    with pytest.raises(kaggle_api.SubmissionNameError):
+        kaggle_api.submit(Path("candidate_submission.zip"), "msg")
+
+
+def test_submit_name_error_is_kaggle_cli_error() -> None:
+    """SubmissionNameError は KaggleCLIError のサブクラス（既存 except で捕捉可能）。"""
+
+    assert issubclass(kaggle_api.SubmissionNameError, kaggle_api.KaggleCLIError)
 
 
 def test_confirm_submission_found(monkeypatch: pytest.MonkeyPatch) -> None:

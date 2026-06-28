@@ -3,6 +3,16 @@
 #
 # taskNNN.onnx を収めたディレクトリを検証し、submission.zip を作って提出する。
 #
+# 提出に関する確定知見（2026-06-28、実 submit で検証済み）:
+#   1. 提出 zip の basename は厳密に "submission.zip" でなければ Kaggle に
+#      拒否される（別名は Web/CLI とも "Submission files must be named
+#      submission.zip" で弾かれる）。本ラッパーが内部で使う packager は
+#      常に submission.zip を生成し、kaggle_api.submit() は別名を
+#      SubmissionNameError で事前に拒否する。
+#   2. submit は kaggle CLI 経由（src/submit/kaggle_api.py の subprocess）で
+#      行う。Python SDK の api.competition_submit() は participate スコープの
+#      quirk で 403 になることがあるため使わない。
+#
 # Usage:
 #   dev/submit -m "初回提出"                       # data/output/onnx を提出
 #   dev/submit -m "テスト" --dry-run               # 検証 + zip 生成のみ

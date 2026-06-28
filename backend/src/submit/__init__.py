@@ -4,6 +4,8 @@ from submit.auth import AuthError, ensure_credentials
 from submit.history import record
 from submit.kaggle_api import (
     COMPETITION,
+    KaggleCLIError,
+    SubmissionNameError,
     confirm_submission,
     list_submissions,
     poll,
@@ -21,7 +23,9 @@ __all__ = [
     "COMPETITION",
     "SUBMISSION_NAME",
     "AuthError",
+    "KaggleCLIError",
     "PackagingError",
+    "SubmissionNameError",
     "TaskValidation",
     "ValidationError",
     "build_submission_zip",

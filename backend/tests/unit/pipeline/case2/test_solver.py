@@ -10,7 +10,7 @@ import numpy as np
 from pipeline.case2 import solver
 
 
-def _write_task(tmp_path: Path, inp: list, out: list) -> Path:
+def _write_task(tmp_path: Path, inp: list[list[int]], out: list[list[int]]) -> Path:
     task = {"train": [{"input": inp, "output": out}], "test": [], "arc-gen": []}
     p = tmp_path / "task001.json"
     p.write_text(json.dumps(task))

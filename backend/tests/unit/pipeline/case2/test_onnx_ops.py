@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from typing import Any
 
 import numpy as np
 import onnx
@@ -19,19 +20,22 @@ from evaluate import audit_one
 from pipeline.case2 import onnx_ops as ops
 
 
-def _score(model: onnx.ModelProto, examples: dict | None) -> dict:
+def _score(model: onnx.ModelProto, examples: dict[str, Any] | None) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "m.onnx")
         onnx.save(model, path)
         cwd = os.getcwd()
         os.chdir(tmp)
         try:
-            return audit_one(path, examples, run_correctness=examples is not None)
+            result: dict[str, Any] = audit_one(
+                path, examples, run_correctness=examples is not None
+            )
+            return result
         finally:
             os.chdir(cwd)
 
 
-def _task(inp: list[list[int]], out: list[list[int]]) -> dict:
+def _task(inp: list[list[int]], out: list[list[int]]) -> dict[str, Any]:
     return {"train": [{"input": inp, "output": out}], "test": [], "arc-gen": []}
 
 
