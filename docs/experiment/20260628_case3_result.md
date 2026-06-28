@@ -74,6 +74,16 @@ floor が全クラスで最小実装と確定。**6 系統的検出 + 15 deep-di
 - → 元 blend の却下は**正当**（false-negative 起因の取りこぼし無し）。floor の極小実装(t015=900)が圧勝。
 - **7 系統的検証すべてで positive win 0**。floor 7172.43 が最適であることが完全に確定。
 
+## 第6フェーズ: degrade-guard + 並行プロセス検出
+
+- **floor bundle 健全性確認**（`dev/submit --dry-run`）: 全400タスク validation 通過、submission.zip
+  生成成功、constraint/size 違反なし。floor は intact かつ submission-ready（退行なし）。提出枠は未消費。
+- **並行 autonomous プロセスを検出**: 同一作業ツリーで `floodfill.build_floodfill_8conn` +
+  `solvers.solve_floodfill`（8連結 flood-fill）を実装中（未コミット WIP）。
+- **その solve_floodfill を faithful 検証 → 退行確定**: task002 cost 33317→17224 だが **n_fail=268/268**、
+  task251 cost 4920→4344 だが **n_fail=144/266**。cost だけ「win」に見えるが全滅。SOLVERS の audit が
+  正しく reject するため solve のまま回せば安全。メモリに「手動 override 厳禁」警告を追加。並行 WIP は不触。
+
 ## 現状と次の一手
 
 - floor 7172.43 は全公開手法の上限付近。LB トップは非公開チーム 7942.46（≒目標 7950）。
