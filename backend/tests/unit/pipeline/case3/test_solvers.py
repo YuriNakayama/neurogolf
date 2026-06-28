@@ -218,6 +218,69 @@ def test_solve_floodfill_recolor_not_applicable() -> None:
     assert solvers.solve_floodfill(_task(inp, out)) is None
 
 
+def test_solve_floodfill_oob_routing_no_false_enclosed() -> None:
+    """arc-gen グリッドが訓練例より小さいとき OOB 経由経路のステップ数を正しく計算する。
+
+    バグ再現: _min_8conn_steps が m×m ワークスペースではなく実グリッド内で計算すると、
+    OOB 経由でのみ到達可能な外側セルが enclosed と誤判定され INCORRECT になる。
+    訓練例 (12×12) が m=12 を決定し、arc-gen 例 (9×9) の外側セル (3,4) が
+    m=12 のワークスペースでは 8 ステップ必要なのに 7 ステップしか持たない場合。
+    """
+    # 12×12 training: box enclosed region (sets m=12)
+    train_inp = [[0] * 12 for _ in range(12)]
+    train_out = [[0] * 12 for _ in range(12)]
+    for r in range(1, 11):
+        for c in range(1, 11):
+            if r in (1, 10) or c in (1, 10):
+                train_inp[r][c] = 2
+                train_out[r][c] = 2
+            elif 2 <= r <= 9 and 2 <= c <= 9:
+                train_out[r][c] = 1
+
+    # 9×9 arc-gen: two separate enclosed regions; cell (3,4) must stay 0 (exterior)
+    # Exterior path for (3,4): (4,4)→(5,4)→(6,4)→(7,4)→(8,4)[border]
+    # In 12×12 workspace: (8,4)→(9,4)[OOB]→(10,4)[OOB]→(11,4)[ws-border] = 8 steps total
+    arc_inp = [
+        [2, 0, 0, 0, 0, 2, 0, 0, 0],
+        [2, 0, 0, 0, 0, 2, 0, 0, 0],
+        [2, 2, 2, 2, 2, 2, 0, 0, 0],
+        [2, 2, 2, 2, 0, 2, 2, 2, 2],
+        [2, 0, 0, 2, 0, 2, 0, 0, 0],
+        [2, 0, 0, 2, 0, 2, 0, 0, 0],
+        [2, 0, 0, 2, 0, 2, 2, 2, 2],
+        [2, 0, 0, 2, 0, 0, 0, 0, 0],
+        [2, 2, 2, 2, 0, 0, 0, 0, 0],
+    ]
+    arc_out = [
+        [2, 0, 0, 0, 0, 2, 0, 0, 0],
+        [2, 0, 0, 0, 0, 2, 0, 0, 0],
+        [2, 2, 2, 2, 2, 2, 0, 0, 0],
+        [2, 2, 2, 2, 0, 2, 2, 2, 2],
+        [2, 1, 1, 2, 0, 2, 0, 0, 0],
+        [2, 1, 1, 2, 0, 2, 0, 0, 0],
+        [2, 1, 1, 2, 0, 2, 2, 2, 2],
+        [2, 1, 1, 2, 0, 0, 0, 0, 0],
+        [2, 2, 2, 2, 0, 0, 0, 0, 0],
+    ]
+
+    task = Task(
+        num=1,
+        train=(Example(input=train_inp, output=train_out),),
+        test=(),
+        arc_gen=(Example(input=arc_inp, output=arc_out),),
+    )
+    model = solvers.solve_floodfill(task)
+    assert model is not None
+    examples: dict[str, Any] = {
+        "train": [{"input": train_inp, "output": train_out}],
+        "test": [],
+        "arc-gen": [{"input": arc_inp, "output": arc_out}],
+    }
+    res = _run_audit(model, examples)
+    assert res["status"] == "ok", f"Expected ok, got {res}"
+    assert res["n_fail"] == 0
+
+
 def test_solve_floodfill_cost_below_threshold() -> None:
     """生成コスト < 10000 であること (基本的な小グリッドの上限チェック)。"""
     inp = [

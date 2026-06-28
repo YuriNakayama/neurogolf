@@ -236,18 +236,29 @@ def _find_line_color(examples: tuple[Example, ...], fill: int) -> int | None:
     return colors.pop()
 
 
-def _min_8conn_steps(examples: tuple[Example, ...]) -> int:
-    """外周から 8 連結 BFS で border-reachable 自由セル全体に到達するのに必要な最小ステップ数。"""
+def _min_8conn_steps(examples: tuple[Example, ...], m: int | None = None) -> int:
+    """外周から 8 連結 BFS で border-reachable 自由セル全体に到達するのに必要な最小ステップ数。
+
+    ONNX は m×m ワークスペース（OOB セルは自由）で動作するため、BFS も同じ空間で計算する。
+    グリッドが m より小さい場合、OOB を経由する経路が実グリッド内より長くなることがある。
+    """
+    if m is None:
+        m = _max_dim(examples)
     max_depth = 0
     for e in examples:
         a = np.array(e.input, dtype=np.int64)
         h, w = a.shape
-        free = a == 0
-        dist: np.ndarray = np.full((h, w), -1, dtype=np.int64)
-        dq: deque[tuple[int, int]] = deque()
+        # m×m 自由マップ: OOB セルは自由、壁セル(非ゼロ)は非自由
+        free_m = np.ones((m, m), dtype=bool)
         for r in range(h):
             for c in range(w):
-                if free[r, c] and (r == 0 or r == h - 1 or c == 0 or c == w - 1):
+                if a[r, c] != 0:
+                    free_m[r, c] = False
+        dist: np.ndarray = np.full((m, m), -1, dtype=np.int64)
+        dq: deque[tuple[int, int]] = deque()
+        for r in range(m):
+            for c in range(m):
+                if free_m[r, c] and (r == 0 or r == m - 1 or c == 0 or c == m - 1):
                     dist[r, c] = 0
                     dq.append((r, c))
         while dq:
@@ -258,9 +269,9 @@ def _min_8conn_steps(examples: tuple[Example, ...]) -> int:
                         continue
                     nr, nc = r + dr, c + dc
                     if (
-                        0 <= nr < h
-                        and 0 <= nc < w
-                        and free[nr, nc]
+                        0 <= nr < m
+                        and 0 <= nc < m
+                        and free_m[nr, nc]
                         and dist[nr, nc] == -1
                     ):
                         dist[nr, nc] = dist[r, c] + 1
@@ -293,7 +304,7 @@ def build_floodfill_8conn(
     if m < 3:
         return None
 
-    steps = n_steps if n_steps is not None else _min_8conn_steps(examples)
+    steps = n_steps if n_steps is not None else _min_8conn_steps(examples, m)
 
     nodes: list[onnx.NodeProto] = []
     inits: list[onnx.TensorProto] = []
