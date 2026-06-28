@@ -37,6 +37,15 @@
     **cost 36030**（[1,10,30,30] 中間テンソル）で完敗。floor が圧倒的に優秀。
 - → 幾何変換タスクも floor が bank より遥かに golf 済み。**検証した全 10 レバーで positive win 0**。
 
+## 追検証（第3フェーズ）: 中コスト帯 per-task redesign — 候補も全て near-optimal
+
+ユーザー方針「per-task redesign 継続」に従い中コスト帯(1000-5000)を精査:
+- **task196**(4538, 5 MaxPool): 閉ループ(完全な矩形枠)を検出して 1→3 recolor。内側 enclosure 判定の
+  **非局所** flood で、step 削減は大きい private 図形で退行リスク → 不採用。
+- **task302**(1774, 6ノード, QLinearConv 5×5): 最小一致 **k=5**（k=3 では不一致）→ 5×5 conv は正当、縮小不可。
+- **task287**(1994): 最小一致 k=9（対称性 Einsum で実装）。task246/168/051: 純粋局所でない(k=None)。
+- → 中コスト帯も bundle が最小 conv/最小 step/専用アルゴで実装済み。redesign win 無し。
+
 ## 現状と次の一手
 
 - floor 7172.43 は全公開手法の上限付近。LB トップは非公開チーム 7942.46（≒目標 7950）。
