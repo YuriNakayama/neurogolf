@@ -41,12 +41,9 @@ def _validations_table(results: list[TaskValidation]) -> Table:
     table.add_column("cost", justify="right")
     table.add_column("score", justify="right")
     for r in results:
-        table.add_row(
-            r.path.name,
-            f"{r.size_bytes:,}",
-            f"{r.cost:,}",
-            f"{r.score:.3f}",
-        )
+        cost = f"{r.cost:,}" if r.cost is not None else "—"
+        score = f"{r.score:.3f}" if r.score is not None else "(local未推定)"
+        table.add_row(r.path.name, f"{r.size_bytes:,}", cost, score)
     return table
 
 
@@ -88,8 +85,15 @@ def submit_cmd(
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=2) from exc
     console.print(_validations_table(results))
-    total_score = sum(r.score for r in results)
-    console.print(f"  tasks: {len(results)}  推定合計スコア: {total_score:.3f}")
+    total_score = sum(r.score for r in results if r.score is not None)
+    unscorable = [r for r in results if not r.scorable]
+    summary = f"  tasks: {len(results)}  推定合計スコア: {total_score:.3f}"
+    if unscorable:
+        summary += (
+            f"  (うち {len(unscorable)} 件は local 未推定だが提出に含める"
+            " — Kaggle 採点に委ねる)"
+        )
+    console.print(summary)
 
     console.print("\n[bold]2) submission.zip 生成[/]")
     archive = build_submission_zip(onnx_dir, output_dir, files=files)
@@ -179,9 +183,12 @@ def validate_cmd(
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=2) from exc
     console.print(_validations_table(results))
-    console.print(
-        f"  tasks: {len(results)}  推定合計スコア: {sum(r.score for r in results):.3f}"
-    )
+    total = sum(r.score for r in results if r.score is not None)
+    unscorable = sum(1 for r in results if not r.scorable)
+    line = f"  tasks: {len(results)}  推定合計スコア: {total:.3f}"
+    if unscorable:
+        line += f"  (うち {unscorable} 件は local 未推定)"
+    console.print(line)
 
 
 @app.command("submissions")

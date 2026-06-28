@@ -97,3 +97,4 @@ kaggle.json
 
 # skill-creator workspaces (per-skill eval outputs / benchmarks; reproducible)
 .claude/skills/*-workspace/
+backend/data/
