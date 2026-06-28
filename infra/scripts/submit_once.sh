@@ -11,13 +11,19 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
+readonly LOOP_DIR="/app/loop"
 readonly REPO_DIR="${WORK_DIR:-/work/neurogolf}"
 readonly BACKEND_DIR="${REPO_DIR}/backend"
 # ONNX_DIR は backend 相対（python -m submit が backend で動くため）。
 readonly ONNX_DIR="${ONNX_DIR:-data/output/onnx}"
-# DVC は repo root（/app）に init 済み。pull 対象は root 相対パス。
+# DVC は repo root に init 済み。pull 対象は root 相対パス。
 readonly DVC_TARGET="data/output/onnx"
 readonly FINGERPRINT_S3="s3://${LOG_BUCKET:-}/state/submit/last_fingerprint.txt"
+
+# entrypoint は exec で本スクリプトを起動するため、ロガー関数を再度 source する。
+# shellcheck source=infra/scripts/s3_logger.sh
+source "${LOOP_DIR}/s3_logger.sh"
+log_init "submit"
 
 cd "${BACKEND_DIR}" || exit 1
 

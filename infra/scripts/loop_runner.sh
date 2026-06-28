@@ -23,6 +23,12 @@ readonly PROMPTS_DIR="${LOOP_DIR}/prompts"
 readonly GITHUB_REPO="${GITHUB_REPO:-YuriNakayama/neurogolf}"
 readonly BRANCH_INTERVAL="${BRANCH_INTERVAL_SECONDS:-10800}"
 
+# entrypoint は exec で本スクリプトを起動するため、source 済みのロガー関数は
+# 引き継がれない。ここで明示的に source し、ログ状態を初期化する。
+# shellcheck source=infra/scripts/s3_logger.sh
+source "${LOOP_DIR}/s3_logger.sh"
+log_init "loop"
+
 # Claude headless の安全弁。
 readonly CLAUDE_MAX_TURNS="${CLAUDE_MAX_TURNS:-60}"
 readonly CLAUDE_IMPL_TIMEOUT="${CLAUDE_IMPL_TIMEOUT:-3600}"   # 実装フェーズ上限 1h
