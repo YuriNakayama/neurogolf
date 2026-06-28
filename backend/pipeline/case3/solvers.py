@@ -13,7 +13,7 @@ import numpy as np
 import onnx
 
 from . import builders as B
-from .arc import NUM_COLORS, Example, Task
+from .arc import NUM_COLORS, Example, Task, grid_shape
 from .lookup import _build_table
 from .residual import build_residual
 from .smalllookup import build_small_lookup
@@ -34,6 +34,12 @@ def _same_shape(e: Example) -> bool:
     return (len(e.input), len(e.input[0])) == (len(e.output), len(e.output[0]))
 
 
+def _const_dim(task: Task, *, axis: int) -> int | None:
+    """全 example で入力グリッドの ``axis`` 次元が一定なら返す。"""
+    dims = {grid_shape(e.input)[axis] for e in task.valid_examples()}
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
 # --- geometric / trivial -----------------------------------------------------
 def solve_identity(task: Task) -> onnx.ModelProto | None:
     if _all(task, lambda e: e.input == e.output):
@@ -42,28 +48,38 @@ def solve_identity(task: Task) -> onnx.ModelProto | None:
 
 
 def solve_flip_v(task: Task) -> onnx.ModelProto | None:
+    h = _const_dim(task, axis=0)
+    if h is None:
+        return None
     if _all(
         task,
         lambda e: (
             _same_shape(e) and _np(e.output).tolist() == _np(e.input)[::-1].tolist()
         ),
     ):
-        return B.build_flip(2)
+        return B.build_flip(h, 2)
     return None
 
 
 def solve_flip_h(task: Task) -> onnx.ModelProto | None:
+    w = _const_dim(task, axis=1)
+    if w is None:
+        return None
     if _all(
         task,
         lambda e: (
             _same_shape(e) and _np(e.output).tolist() == _np(e.input)[:, ::-1].tolist()
         ),
     ):
-        return B.build_flip(3)
+        return B.build_flip(w, 3)
     return None
 
 
 def solve_rot180(task: Task) -> onnx.ModelProto | None:
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    if h is None or w is None:
+        return None
     if _all(
         task,
         lambda e: (
@@ -71,8 +87,7 @@ def solve_rot180(task: Task) -> onnx.ModelProto | None:
             and _np(e.output).tolist() == _np(e.input)[::-1, ::-1].tolist()
         ),
     ):
-        # rot180 = flip both axes via two Slices? cheaper: single Slice on both axes
-        return _build_rot180()
+        return B.build_rot180(h, w)
     return None
 
 
@@ -88,17 +103,30 @@ def solve_transpose(task: Task) -> onnx.ModelProto | None:
     return None
 
 
-def _build_rot180() -> onnx.ModelProto:
-    from onnx import TensorProto, helper
+def solve_rot90(task: Task) -> onnx.ModelProto | None:
+    """rot90 CW: output[r][c] = input[h-1-c][r]。"""
+    h = _const_dim(task, axis=0)
+    if h is None:
+        return None
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist() == np.rot90(_np(e.input), k=-1).tolist(),
+    ):
+        return B.build_rot90(h)
+    return None
 
-    starts = helper.make_tensor("s", TensorProto.INT64, [2], [-1, -1])
-    ends = helper.make_tensor(
-        "e", TensorProto.INT64, [2], [-(B.GRID_MAX + 1), -(B.GRID_MAX + 1)]
-    )
-    axes = helper.make_tensor("a", TensorProto.INT64, [2], [2, 3])
-    steps = helper.make_tensor("t", TensorProto.INT64, [2], [-1, -1])
-    node = helper.make_node("Slice", ["input", "s", "e", "a", "t"], ["output"])
-    return B._model([node], [starts, ends, axes, steps])
+
+def solve_rot270(task: Task) -> onnx.ModelProto | None:
+    """rot270 CCW: output[r][c] = input[c][w-1-r]。"""
+    w = _const_dim(task, axis=1)
+    if w is None:
+        return None
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist() == np.rot90(_np(e.input), k=1).tolist(),
+    ):
+        return B.build_rot270(w)
+    return None
 
 
 # --- recolor (global color map) ---------------------------------------------
@@ -194,6 +222,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("flip_v", solve_flip_v),
     ("flip_h", solve_flip_h),
     ("rot180", solve_rot180),
+    ("rot90", solve_rot90),
+    ("rot270", solve_rot270),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
