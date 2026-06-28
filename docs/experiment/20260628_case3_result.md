@@ -25,6 +25,18 @@
    E42（全 worktree 横断で combined_best が最適）を本セッションが独立に再確認。
 3. **この隔離コンテナでは dsl-harvest 不可**（sibling worktree 無し）。歴史的主力レバーが使えない。
 
+## 追検証（第2フェーズ）: 幾何変換・cheap-solver も枯渇
+
+- メモリの「task002 8連結 flood-fill +0.70」案を numpy 全例検証 → **完全に誤り**:
+  4連結==8連結 は 268 例すべて不一致、8連結は **0/268**（真ルールは4連結, 268/268）。撤回。
+- cheap-solver 検出（recolor/transpose/flip/rotate, cost>60）= 3 件のみ:
+  t150(158, fliplr) t155(158, flipud) t380(99, rot90)。いずれも floor が既に最小付近:
+  - t150/t155 は**可変サイズ**で静的 flip 不可。floor は ReduceL2 で動的にサイズ検出する 4 ノード版（158）。
+    solver bank の静的 flip は `_const_dim` 前提で適用不可。
+  - t380（全 3×3 定数）は floor が**単一 Einsum 99 params/0 memory**。bank の build_rot270 は正答だが
+    **cost 36030**（[1,10,30,30] 中間テンソル）で完敗。floor が圧倒的に優秀。
+- → 幾何変換タスクも floor が bank より遥かに golf 済み。**検証した全 10 レバーで positive win 0**。
+
 ## 現状と次の一手
 
 - floor 7172.43 は全公開手法の上限付近。LB トップは非公開チーム 7942.46（≒目標 7950）。
