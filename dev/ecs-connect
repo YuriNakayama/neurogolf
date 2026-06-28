@@ -1,0 +1,94 @@
+#!/bin/bash
+# ---------------------------------------------------------------------------
+# dev/ecs-connect — ECS Fargate の loop / submit コンテナへ対話接続する。
+#
+# Fargate に SSH は無い。コンテナへ入る唯一の方法は ECS Exec
+# (`aws ecs execute-command`)。本スクリプトは実行中タスクを自動検出し、
+# session-manager-plugin 経由で /bin/bash を開く。
+#
+# 前提（infra で構成済み）:
+#   - service の enable_execute_command = true
+#   - task role に ssmmessages:{Create,Open}{Control,Data}Channel
+#   - 手元に session-manager-plugin（`brew install --cask session-manager-plugin`）
+#
+# Usage:
+#   dev/ecs-connect                       # loop コンテナに bash で接続
+#   dev/ecs-connect submit                # submit タスク（短命・稼働中のみ）に接続
+#   dev/ecs-connect -- <cmd...>           # 対話せず一発コマンドを実行
+#   dev/ecs-connect loop -- ls /app/loop  # サービス指定 + 一発コマンド
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+CLUSTER="neurogolf"
+REGION="${AWS_REGION:-ap-northeast-1}"
+CONTAINER="loop"   # どちらのタスク定義もコンテナ名は "loop"
+
+# --- 引数パース: [service] [-- cmd...] ---------------------------------------
+SERVICE="loop"          # loop | submit
+ONESHOT_CMD=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    loop | submit)
+      SERVICE="$1"; shift ;;
+    --)
+      shift; ONESHOT_CMD=("$@"); break ;;
+    -h | --help)
+      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)
+      echo "不明な引数: $1（loop|submit または -- <cmd> を指定）" >&2; exit 2 ;;
+  esac
+done
+
+# --- 前提チェック -----------------------------------------------------------
+if ! command -v session-manager-plugin >/dev/null 2>&1; then
+  echo "session-manager-plugin が必要です: brew install --cask session-manager-plugin" >&2
+  exit 1
+fi
+
+# --- 実行中タスクを検出 -----------------------------------------------------
+# loop は常駐サービス、submit は EventBridge 起動の短命タスク（family 指定）。
+find_task() {
+  if [ "${SERVICE}" = "loop" ]; then
+    aws ecs list-tasks --cluster "${CLUSTER}" --region "${REGION}" \
+      --service-name "${CLUSTER}-loop" --desired-status RUNNING \
+      --query 'taskArns[0]' --output text 2>/dev/null
+  else
+    aws ecs list-tasks --cluster "${CLUSTER}" --region "${REGION}" \
+      --family "${CLUSTER}-submit" --desired-status RUNNING \
+      --query 'taskArns[0]' --output text 2>/dev/null
+  fi
+}
+
+TASK_ARN="$(find_task)"
+if [ -z "${TASK_ARN}" ] || [ "${TASK_ARN}" = "None" ]; then
+  echo "実行中の ${SERVICE} タスクが見つかりません。" >&2
+  if [ "${SERVICE}" = "submit" ]; then
+    echo "submit は 15 分毎の短命タスクです。稼働中のタイミングでのみ接続できます。" >&2
+  else
+    echo "loop service を起動してください: aws ecs update-service --cluster ${CLUSTER} --service ${CLUSTER}-loop --desired-count 1" >&2
+  fi
+  exit 1
+fi
+TASK_ID="${TASK_ARN##*/}"
+
+# --- exec エージェントの準備確認 --------------------------------------------
+EXEC_OK="$(aws ecs describe-tasks --cluster "${CLUSTER}" --region "${REGION}" \
+  --tasks "${TASK_ARN}" --query 'tasks[0].enableExecuteCommand' --output text 2>/dev/null)"
+if [ "${EXEC_OK}" != "True" ]; then
+  echo "このタスク (${TASK_ID}) は ECS Exec 無効で起動しています。" >&2
+  echo "infra で enable_execute_command=true を apply 後、force-new-deployment で起動し直してください。" >&2
+  exit 1
+fi
+
+echo "==> ${SERVICE} task ${TASK_ID} に接続します" >&2
+
+# --- 接続 -------------------------------------------------------------------
+if [ "${#ONESHOT_CMD[@]}" -gt 0 ]; then
+  exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
+    --task "${TASK_ARN}" --container "${CONTAINER}" \
+    --command "/bin/sh -c '$(printf '%s ' "${ONESHOT_CMD[@]}")'" --interactive
+else
+  exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
+    --task "${TASK_ARN}" --container "${CONTAINER}" \
+    --command "/bin/bash" --interactive
+fi
