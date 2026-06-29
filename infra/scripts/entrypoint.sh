@@ -160,13 +160,18 @@ dvc_preflight() {
 
 # --- preflight: git / kaggle / dvc が実際に使えるか起動時に検証 -------------
 # 「ECS を立ち上げると常に git / kaggle submit / dvc が使える」ことを保証する。
-# clone 済み WORK_DIR を前提に各機能を能動的に叩く。失敗は明示ログを出し、
-# loop モードでは fail-fast（壊れた環境で延々空回りしない）、submit モードでは
-# 個々の前提（kaggle 必須）を呼び出し側で再確認する。
+# clone 済み WORK_DIR を前提に各機能を能動的に叩く。
+#
+# fail-fast の対象は git / kaggle のみ（loop の必須前提）。dvc は warn 止まりに
+# する: dvc_preflight は `uv run dvc remote list` + `aws s3 ls` を timeout 付きで
+# 叩くが、初回 uv 解決や S3 レスポンスの揺らぎで bounded timeout を超えやすく、
+# false-negative で loop 全体を exit 71 → 再起動ループに陥れていた。dvc の実体は
+# loop_runner / submit_once が pull/push 時に毎回叩くため、起動時の到達確認が
+# 多少滑っても実害は無い（失敗すればそのサイクルが warn を出すだけ）。
 preflight_check() {
   local ok=0
 
-  # git: remote 認証が通り fetch 可能か。
+  # git: remote 認証が通り fetch 可能か。【致命】
   if git -C "${WORK_DIR}" ls-remote origin HEAD >/dev/null 2>&1; then
     log_info "preflight git: OK (remote reachable + authenticated)"
   else
@@ -174,7 +179,7 @@ preflight_check() {
     ok=1
   fi
 
-  # kaggle: CLI が PATH にあり、認証付きでコンペにアクセスできるか。
+  # kaggle: CLI が PATH にあり、認証付きでコンペにアクセスできるか。【致命】
   if (cd "${WORK_DIR}/backend" && kaggle competitions list -s neurogolf \
       >/dev/null 2>&1); then
     log_info "preflight kaggle: OK (CLI on PATH + authenticated)"
@@ -183,17 +188,12 @@ preflight_check() {
     ok=1
   fi
 
-  # dvc: remote 'storage' が設定され、IAM(task role)で S3 に到達できるか。
-  # 注意: `dvc status -c -r storage` は remote キャッシュ全体を走査するため
-  # 数分単位で遅く、起動を block する。代わりに (1) remote 設定の存在を
-  # `dvc remote list` で確認し、(2) その S3 URL を `aws s3 ls` で bounded に
-  # 叩いて IAM 到達性を確認する。どちらも config/HEAD 操作で軽量。timeout で
-  # 上限を設けハングを防ぐ。
+  # dvc: remote 'storage' が設定され、IAM(task role)で S3 に到達できるか。【非致命】
+  # 失敗しても ok=1 にせず warn のみ。実 pull/push はサイクル内で再確認される。
   if dvc_preflight; then
     log_info "preflight dvc: OK (remote 'storage' configured + S3 reachable via IAM)"
   else
-    log_error "preflight dvc: FAIL (remote unconfigured or S3 unreachable — check .dvc/config + task role)"
-    ok=1
+    log_warn "preflight dvc: WARN (remote unconfigured or S3 unreachable — 起動は継続。pull/push 時に再確認)"
   fi
 
   return "${ok}"
@@ -214,7 +214,7 @@ main() {
   # clone 後に kaggle / venv-PATH を整え、git / kaggle / dvc を検証する。
   init_kaggle_config
   if ! preflight_check; then
-    log_error "preflight failed: git/kaggle/dvc のいずれかが利用不可"
+    log_error "preflight failed: git/kaggle のいずれかが利用不可（dvc は非致命）"
     # loop は壊れた環境で空回りさせず終了（ECS が再起動を試みる）。
     # submit は呼び出し側で kaggle 必須を再判定するため継続する。
     if [[ "${MODE}" == "loop" ]]; then
