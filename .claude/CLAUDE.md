@@ -4,6 +4,16 @@ Project for **The 2026 NeuroGolf Championship** on Kaggle (IJCAI-ECAI 2026 Compe
 
 > ℹ️ **Migrated from a PTCG (Pokémon TCG battle-AI) scaffold.** The generic scaffolding (uv / ruff / mypy / pytest, `dev/*`, CI) is reused; PTCG-specific code (cabt engine, self-play, agent families, GPU/infra) was removed. The NeuroGolf core is **implemented**: ARC-AGI loader/encoding (`src/arc`), ONNX build/cost/constraints (`src/onnxgolf`), ONNX `submission.zip` packaging + validation (`src/submit`), and identity/recolor PoC solvers (`src/solvers`) — all green under `dev/test-bot`. Remaining work (real ARC data download, richer solvers) is tracked in [`docs/develop/MIGRATION.md`](../docs/develop/MIGRATION.md). Full competition spec: [`docs/competition/abstract.md`](../docs/competition/abstract.md).
 
+## ⚠️ Strategic Directive (MUST FOLLOW — repeatedly corrected by user)
+
+**The path to a competitive score is ORIGINAL per-task minimal-circuit design — NOT harvesting or monitoring other teams' public submissions.**
+
+- **Harvesting** other competitors' public `submission.zip` (cross-bundle cherry-pick) and **optimizing existing public nets** (graph surgery / dtype narrowing) are bounded by the **public envelope (~7180)**. They are *floor-maintenance only* — never the route to the target (7950) and never to be reported as "progress" toward it.
+- **Top teams (7900+, avg cost ~190/task) build each task's minimal ONNX circuit from scratch from the ARC rule.** That is the only real advancement lever. Default to it.
+- **Anti-pattern to avoid** (the agent has regressed into this ≥2×): defaulting to "wait for a new public bundle" / monitoring loops when blocked, instead of doing original design. When blocked, design an original solver — do not retreat to monitoring.
+- **"退行ゼロ最優先" means: don't break the existing floor submission.** It does NOT mean avoid original design. Kaggle keeps your best submission, so trying an original net in a separate submit cannot regress the floor. Risk/hidden-failure is a reason a task is *hard*, not a reason to skip it.
+- **Hidden-safety for original nets**: implement the *true* algorithm (not a fit/lookup of the public net), verify n_fail=0 over all examples with the faithful scorer (onnx 1.20.0 / ort 1.24.1), and confirm generalization on structured/random inputs. See `docs/experiment/faithful-scorer.md` and the `feedback-original-design-over-harvest` memory.
+
 ## Task Overview
 
 NeuroGolf is an **offline "neural golf"** competition: for each ARC-AGI grid-transformation task, build the *smallest* ONNX network that solves it exactly. There is no opponent, game engine, or rating ladder.
