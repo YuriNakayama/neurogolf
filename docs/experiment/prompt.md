@@ -8,6 +8,12 @@ cost = params + memory。MACs は寄与しない）。目標は 7950。これを
 なぜ重要か: スコアは解けたタスク数と各 cost だけで決まり、判断は常にこの 1 指標に紐づく。
 - 解けたタスク数を増やす（ソルバ追加で +最大25点/タスク）
 - 各タスクの cost を下げる（params/memory 削減で 25-ln(cost) が増加）
+
+**⚠️ 主レバー = ARC 規則からの独自最小回路設計（original per-task design）。**
+他チームの公開 submission.zip の harvest/cherry-pick や既存公開ネットの最適化(surgery/dtype)は
+**公開包絡線(~7180)が天井**で、floor 維持の補助に過ぎない（目標 7950 への道ではない）。
+行き詰まっても監視待機/harvest に逃げず、独自ソルバ設計を続けること。詳細は .claude/CLAUDE.md の
+「Strategic Directive」と memory `feedback-original-design-over-harvest` を必読。
 正答性は足切り（train/test/arc-gen の全ペア完全一致でなければ 0 点）。成否は実 submit の
 Public Score で測る。ローカル監査は Kaggle 実 LB と一致しない（false-negative あり）ため、
 ローカルだけで既存タスクを差し替えない。
