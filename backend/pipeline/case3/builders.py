@@ -123,3 +123,37 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def _tile_idx(n: int, reps: int) -> list[int]:
+    """n を reps 回繰り返すインデックス（reps*n > 30 はクリップ）、残りは GRID_MAX-1。"""
+    out = (list(range(n)) * reps)[:GRID_MAX]
+    return out + [GRID_MAX - 1] * (GRID_MAX - len(out))
+
+
+def build_tile(h: int, w: int, reps_h: int, reps_w: int) -> onnx.ModelProto:
+    """h×w グリッドを reps_h × reps_w 回タイリング（各軸 Gather）。params=60。"""
+    rows = _tile_idx(h, reps_h)
+    cols = _tile_idx(w, reps_w)
+    h_init = helper.make_tensor("rows", TensorProto.INT64, [GRID_MAX], rows)
+    w_init = helper.make_tensor("cols", TensorProto.INT64, [GRID_MAX], cols)
+    g1 = helper.make_node("Gather", ["input", "rows"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "cols"], ["output"], axis=3)
+    return _model([g1, g2], [h_init, w_init])
+
+
+def _scale_idx(n: int, factor: int) -> list[int]:
+    """各セルを factor 回繰り返す（output[i] = input[i // factor]）。"""
+    out = [i // factor for i in range(min(n * factor, GRID_MAX))]
+    return out + [GRID_MAX - 1] * (GRID_MAX - len(out))
+
+
+def build_scale(h: int, w: int, sh: int, sw: int) -> onnx.ModelProto:
+    """h×w グリッドを sh×sw 倍にズーム（各セルを sh×sw ブロックに）。params=60。"""
+    rows = _scale_idx(h, sh)
+    cols = _scale_idx(w, sw)
+    h_init = helper.make_tensor("rows", TensorProto.INT64, [GRID_MAX], rows)
+    w_init = helper.make_tensor("cols", TensorProto.INT64, [GRID_MAX], cols)
+    g1 = helper.make_node("Gather", ["input", "rows"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "cols"], ["output"], axis=3)
+    return _model([g1, g2], [h_init, w_init])
