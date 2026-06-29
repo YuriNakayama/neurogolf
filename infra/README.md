@@ -143,6 +143,7 @@ uv --project backend run dvc push
 - **コスト監視**: AWS Budgets でアラートを設定。Claude API 課金が主コストになり得る。
 - **停止**: ループを止めるなら `aws ecs update-service --cluster neurogolf --service neurogolf-loop --desired-count 0`。submit を止めるなら scheduler を無効化。
 - **コンテナ接続（デバッグ）**: Fargate に SSH は無い。`dev/ecs-connect` で稼働中 loop コンテナへ ECS Exec 接続する（引数なしで bash、`dev/ecs-connect loop -- <cmd>` で一発実行。接続後の cwd は作業ツリー `/work/neurogolf`）。`enable_execute_command=true`（service）+ task role の `ssmmessages:*`（exec チャネル専用）+ 手元の `session-manager-plugin` が前提。submit タスクは短命かつ exec 無効のため接続不可。
+- **切断耐性（既定で tmux）**: 素の bash で `claude` を起動すると ECS Exec 接続を切った瞬間に SIGHUP で claude も停止する。これを避けるため `dev/ecs-connect` は**既定で tmux セッション `goal` に attach/作成**する。その中で claude を起動 → `Ctrl-b d` でデタッチ（または切断）してもセッションは残り、`dev/ecs-connect` で再 attach できる。素の bash が要るときだけ `--bash`。loop イメージに `tmux` を同梱済み。詳細は [`docs/develop/ecs-manual-prompts.md`](../docs/develop/ecs-manual-prompts.md)。
 - **接続後の手動操作**: 自律ループ相当（implement→PR / planning / Kaggle submit）を手で1回起動するコピペ用プロンプト集は [`docs/develop/ecs-manual-prompts.md`](../docs/develop/ecs-manual-prompts.md)。手動で回す前に常駐ループを `--desired-count 0` で止めると二重 PR / 二重提出を避けられる。
 - **シークレットマスキング**: `s3_logger.sh` が既知トークンをログから伏字化する。ログに新たな秘匿値を出さないこと。
 

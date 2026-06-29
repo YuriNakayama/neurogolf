@@ -16,6 +16,14 @@
 > （手動作業後に `--desired-count 1` で戻す）。同一コンテナ内で `claude` を
 > 直叩きする分にはループ本体（`loop_runner.sh`）とは別プロセスになる。
 
+> ⚠️ **切断で claude が止まる問題（重要）**: 素の bash で `claude` を起動すると、
+> ECS Exec 接続を切った瞬間に bash が SIGHUP で死に、その子の `claude` も道連れで
+> 停止する（接続セッション = プロセスの親）。これを避けるため `dev/ecs-connect` は
+> **既定で tmux セッション `goal` に入る**。その中で claude を起動 → `Ctrl-b d` で
+> デタッチ（または接続が切れても）セッションはコンテナ内に残り続け、`dev/ecs-connect`
+> で再 attach すれば続きを確認できる。以降の手動起動はこの tmux 内で行うこと。
+> 素の bash が要るときだけ `dev/ecs-connect --bash`。
+
 ---
 
 ## 0. 前提確認（最初に1回）

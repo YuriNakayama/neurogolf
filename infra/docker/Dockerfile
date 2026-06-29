@@ -21,7 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # --- OS パッケージ + gh CLI + Node.js + awscli ------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates gnupg unzip jq tini \
+        git curl ca-certificates gnupg unzip jq tini tmux \
     && install -d -m 0755 /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null \

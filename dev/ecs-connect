@@ -12,14 +12,24 @@
 #   - 手元に session-manager-plugin（`brew install --cask session-manager-plugin`）
 #
 # Usage:
-#   dev/ecs-connect                       # loop コンテナに bash で接続
+#   dev/ecs-connect                       # tmux セッション "goal" に attach/作成（既定）
+#   dev/ecs-connect mywork                # 任意名の tmux セッションに attach/作成
 #   dev/ecs-connect submit                # submit タスク（短命・稼働中のみ）に接続
-#   dev/ecs-connect -- <cmd...>           # 対話せず一発コマンドを実行
+#   dev/ecs-connect --bash                # tmux を使わず素の bash で接続
+#   dev/ecs-connect -- <cmd...>           # 対話せず一発コマンドを実行（tmux 無効）
 #   dev/ecs-connect loop -- git status    # サービス指定 + 一発コマンド
 #
 # 着地点は実コードのある作業ツリー（既定 /work/neurogolf、ECS_WORK_DIR で上書き
 # 可）。bash も一発コマンドもここを cwd として開始する。未 clone 時は /app へ
 # フォールバックし警告を出す。
+#
+# 切断耐性（既定で tmux）:
+#   素の bash で claude を起動すると、接続を切った瞬間 bash が SIGHUP で死に、
+#   その子の claude も道連れで停止する（ECS Exec セッション = プロセスの親）。
+#   これを避けるため既定で tmux セッション "goal" に入る。tmux 内で claude を起動し
+#   Ctrl-b d でデタッチ（または接続が切れても）セッションはコンテナ内に残り続け、
+#   `dev/ecs-connect`（同名で再 attach）で続きを見られる。素の bash が要るときだけ
+#   --bash を付ける。
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -30,21 +40,43 @@ CONTAINER="loop"   # どちらのタスク定義もコンテナ名は "loop"
 # 作業ツリー(git/dvc/data 入り)で開く。未 clone なら /app にフォールバック。
 WORK_DIR="${ECS_WORK_DIR:-/work/neurogolf}"
 
-# --- 引数パース: [service] [-- cmd...] ---------------------------------------
-SERVICE="loop"          # loop | submit
+# --- 引数パース: [service] [name|--bash] [-- cmd...] -------------------------
+# 既定は tmux セッション "goal"。素の bash が要るときだけ --bash。
+# bare positional（loop/submit 以外）は tmux セッション名として解釈する。
+SERVICE="loop"              # loop | submit
 ONESHOT_CMD=()
+TMUX_SESSION="goal"         # 空 = tmux 不使用（--bash で空にする）
 while [ $# -gt 0 ]; do
   case "$1" in
     loop | submit)
       SERVICE="$1"; shift ;;
+    --bash | --no-tmux)
+      TMUX_SESSION=""; shift ;;
+    --tmux)
+      # 明示指定。次引数が名前なら採用、無ければ既定 "goal"。
+      shift
+      if [ $# -gt 0 ] && [ "$1" != "--" ] && [ "$1" != "loop" ] \
+         && [ "$1" != "submit" ] && [ "${1#-}" = "$1" ]; then
+        TMUX_SESSION="$1"; shift
+      else
+        TMUX_SESSION="goal"
+      fi ;;
     --)
       shift; ONESHOT_CMD=("$@"); break ;;
     -h | --help)
-      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*)
+      echo "不明な引数: $1（loop|submit / [name] / --bash / -- <cmd> を指定）" >&2; exit 2 ;;
     *)
-      echo "不明な引数: $1（loop|submit または -- <cmd> を指定）" >&2; exit 2 ;;
+      # bare 文字列は tmux セッション名。
+      TMUX_SESSION="$1"; shift ;;
   esac
 done
+
+# 一発コマンド実行時は tmux を無効化（対話 attach 専用のため）。
+if [ "${#ONESHOT_CMD[@]}" -gt 0 ]; then
+  TMUX_SESSION=""
+fi
 
 # --- 前提チェック -----------------------------------------------------------
 if ! command -v session-manager-plugin >/dev/null 2>&1; then
@@ -103,6 +135,18 @@ if [ "${#ONESHOT_CMD[@]}" -gt 0 ]; then
   exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
     --task "${TASK_ARN}" --container "${CONTAINER}" \
     --command "/bin/sh -c '${cd_prelude} $(printf '%s ' "${ONESHOT_CMD[@]}")'" --interactive
+elif [ -n "${TMUX_SESSION}" ]; then
+  # tmux セッションに attach（無ければ作成）。セッションはコンテナ内に常駐し、
+  # ECS Exec 接続が切れても生き続ける → claude を入れておけば停止しない。
+  # セッション名は単純な文字に限定（リモート '...' 内に安全に埋め込むため）。
+  if ! printf '%s' "${TMUX_SESSION}" | grep -qE '^[A-Za-z0-9_-]+$'; then
+    echo "tmux セッション名は英数字・_・- のみ使用可: ${TMUX_SESSION}" >&2; exit 2
+  fi
+  echo "==> tmux セッション '${TMUX_SESSION}' に attach（無ければ作成）。デタッチは Ctrl-b d" >&2
+  # new-session -A: 同名があれば attach、無ければ作成。-s で名前、cwd は cd 済み。
+  exec aws ecs execute-command --cluster "${CLUSTER}" --region "${REGION}" \
+    --task "${TASK_ARN}" --container "${CONTAINER}" \
+    --command "/bin/bash -c '${cd_prelude} exec tmux new-session -A -s ${TMUX_SESSION}'" --interactive
 else
   # cd してから interactive bash へ exec で差し替える。新 shell は通常どおり
   # rc を読み、cwd は作業ツリーになる（process substitution 等の脆い手は避ける）。
