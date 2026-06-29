@@ -120,6 +120,7 @@ exclude = [
     ".claude",
     "poetry.lock",
     "__pycache__",
+    "scratchpad",
 ]
 python_version = "3.13"
 strict = true
