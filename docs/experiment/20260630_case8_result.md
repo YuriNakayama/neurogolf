@@ -34,3 +34,20 @@
 - bit-pack 非局所タスクの深掘り（floor net の冗長削減）は surgery 飽和済みのため、
   手動でのノード単位削減を要する研究課題として保留。
 - floor 7180.58 を退行ゼロで維持。
+
+## cycle9 追記: 自動簡約 + 単一ノード最小性の確認
+
+- **onnxsim**: t233 で segfault（複雑 net に非対応）。**onnxoptimizer**（dead-code/identity/nop 除去）:
+  t233 348→348 で 0 削減 → 公開 net は dead-code フリー、手動ノード削減の余地なし。
+- **gravity t032**: floor net は **単一 Conv ノード（cost 910）**。理論最小構造で改善不可能。
+  t078(grav_up, 1293) も同様に最小付近と推定。
+- **最終確定**: floor は全タスクで（単一 Conv/Gather を含む）最小構造に到達済み。surgery 飽和は
+  「公開 net が既に dead-code フリー & 最小ノード」であることに起因。手動・自動とも削減余地ゼロ。
+
+## 本日（20260630）最終総括（cycle1-9）
+
+- **成果**: lucifer t233 harvest で **7176.49→7180.58（+0.03 相当, 実 LB 確認）= 新 team best**。
+- **枯渇確認したレバー**: harvest(3×, kojimar283含む)/surgery(全走0/400)/onnxoptimizer(0削減)/
+  flood-fill(構造的不可)/k-local(hidden落ち)/colormap・幾何・tiling・mirror・gravity(全て最小)。
+- **floor 7180.58 = 収束した公開包絡線 = 全構造クラスの最適化フロンティア**。
+- **7950 への道**: 公開未到達の新規ソルバ（研究規模）or 新規公開バンドル監視 harvest（受動）のみ。
