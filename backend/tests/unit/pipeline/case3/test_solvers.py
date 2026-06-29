@@ -239,3 +239,40 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── panels ────────────────────────────────────────────────────────────────
+
+
+def test_solve_panels_lr_or() -> None:
+    """LR パネル OR: 左右どちらかに色があれば出力色 3。"""
+    inp = [[1, 0, 0, 1], [0, 0, 0, 0]]
+    out = [[3, 3], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_tb_and() -> None:
+    """TB パネル AND: 上下両方に色があれば出力色 2。"""
+    inp = [[1, 0], [0, 1], [1, 1], [0, 0]]
+    out = [[2, 0], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_not_applicable_returns_none() -> None:
+    """パネル合成ではない単純 identity タスクは None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_panels(_task(g, g)) is None
+
+
+def test_solve_panels_in_solvers_list() -> None:
+    """panels が SOLVERS リストに登録されていること。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "panels" in names

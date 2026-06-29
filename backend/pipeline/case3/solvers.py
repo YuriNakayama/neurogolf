@@ -16,6 +16,7 @@ from . import builders as B
 from .arc import NUM_COLORS, Example, Task, grid_shape
 from .floodfill import build_floodfill_8conn
 from .lookup import _build_table
+from .panels import build_panels
 from .residual import build_residual
 from .smalllookup import build_small_lookup
 
@@ -208,6 +209,10 @@ def solve_small_lookup(task: Task) -> onnx.ModelProto | None:
     return build_small_lookup(task.valid_examples(), k)
 
 
+def solve_panels(task: Task) -> onnx.ModelProto | None:
+    return build_panels(task.valid_examples())
+
+
 def solve_residual3(task: Task) -> onnx.ModelProto | None:
     return build_residual(task.valid_examples(), 3)
 
@@ -232,6 +237,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
+    ("panels", solve_panels),
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
