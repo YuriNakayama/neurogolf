@@ -37,7 +37,17 @@
   各 2-4× golf、上位チームの数週間・多人数規模 = 本ループの実証能力外）でしか埋まらない。
 - 全公開ソース（kernel + dataset）は出し切り、提出可能な意味保存最適化も枯渇。
 
+## cycle8b 追記: golfer 全 variant 横断 harvest も 0 win（包絡線確定）
+
+harvest 早計枯渇判断を是正し、franksunp/kokinnwakashuu の追加 variant を広く検証:
+- **fk_stack / fk_rewire / fk_vb / kk_7169 / kk_7166**（各 400 onnx, distinct md5）: 全て
+  **0 候補**（どのタスクでも combined 7180.46 未満なし）。
+- 結論: harishk(7178.23) バンドルは franksunp/kokinnwakashuu 全 variant の consolidated frontier。
+  私の 15-task cherry-pick が既にその最良を捕捉済み。**計 12 バンドル検証で 7180.46 が公開包絡線**と確定。
+
 ## 次の一手
 
 - 新規高 LB バンドルの公開を監視し、出現次第 cherry-pick→faithful→submit を自動実行。
-- それ以外に退行ゼロで前進できる利用可能レバーは現存しない（無改善 submit はしない）。
+- 検証済みレバー一覧（全て枯渇/不可）: 公開 harvest（12 バンドル）/ per-task golf / ORT 最適化 /
+  surgery / fp16 / 幾何・局所・対称・lookup ソルバ（過去 7 系統）。退行ゼロで前進できる
+  利用可能レバーは現存しない。無改善 submit はしない（提出枠の無駄・退行リスク回避）。
