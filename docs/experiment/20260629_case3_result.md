@@ -70,3 +70,23 @@ cycle1 の「可視データで局所判定」失敗を修正し、floor net 自
 枯渇（surgery 飽和 / 学習 fit は hidden 落ち / colormap 既最小 / 高コストは非局所最小実装 /
 harvest 元なし）。残るは expert-scale の per-task 真アルゴリズム手 golf のみで、本ループでは
 構造的に到達困難。floor 7172.43 を退行なく維持（LB 最良提出を保持）。
+
+## cycle 4 追記: 新規公開バンドル harvest で 7176.49（ACCEPT, +4.06）★採用
+
+LB 確認で **floor を超える新規公開 notebook** を発見（boristown v51=7174.70, uradkr=7174.10,
+franksunp-consolidated, kokinn-blend）。これらは graded 公開バンドル＝verbatim cherry-pick は
+hidden 安全（grader-faithfulness law）。
+
+- **手法**: 各タスクで {floor, boristown, urad, frank, kokinn} の最安版を cost-only で選抜 →
+  floor 以外の pick は faithful 正答検証（n_fail=0 incl arc-gen）→ combined_best 構築。
+  巨大ネット t286 のみ OOM で floor フォールバック（per-task subprocess 隔離で他は完走）。
+- **結果**: 63 wins（全て boristown 由来）, faithful +4.056。t002(33317→24447) t018(66094→45211)
+  t023(16333→13134) t076 t080 等の高コストタスクで boristown が floor より安い。
+- **実 LB = 7176.49**（ref 54165121）= 予測 7172.43+4.06 と**完全一致**。floor 7172.43 から
+  **+4.06**、公開最高 boristown 7174.70 も **+1.79 上回る新 team best**。
+- **採用**: combined を data/output/onnx へ昇格、dvc add/push 済み（infra も新 floor を pull 可能）。
+
+**cycle4 教訓**: 隔離コンテナでも **Kaggle 公開 LB/notebook の新規バンドルは harvest 可能**な
+主力レバー。graded 公開バンドルの cross-bundle cherry-pick は hidden 安全に転送する
+（cycle1 の学習 fit とは対照的）。**定期的に公開 notebook を確認し新バンドルを cherry-pick** すべき。
+新 floor = **7176.49**, 7950 まで −773.5。
