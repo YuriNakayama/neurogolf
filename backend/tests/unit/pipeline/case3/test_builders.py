@@ -135,6 +135,68 @@ def test_rot270_3x3() -> None:
 # ─── onnx.checker pass ─────────────────────────────────────────────────────
 
 
+# ─── upscale (nearest-neighbor) ────────────────────────────────────────────
+
+
+def test_upscale_2x2_by2() -> None:
+    """2×2 グリッドを 2× NN アップスケール → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    out = _run(B.build_upscale(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_upscale_h_only() -> None:
+    """縦方向のみ 2× スケール（横は 1×）。中間テンソルなし。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = [[1, 2, 3], [1, 2, 3], [4, 5, 6], [4, 5, 6]]
+    out = _run(B.build_upscale(2, 3, 2, 1), g)
+    assert _argmax_grid(out, 4, 3) == expected
+
+
+def test_upscale_w_only() -> None:
+    """横方向のみ 2× スケール（縦は 1×）。中間テンソルなし。"""
+    g = [[1, 2], [3, 4], [5, 6]]
+    expected = [[1, 1, 2, 2], [3, 3, 4, 4], [5, 5, 6, 6]]
+    out = _run(B.build_upscale(3, 2, 1, 2), g)
+    assert _argmax_grid(out, 3, 4) == expected
+
+
+def test_upscale_padding_stays_zero() -> None:
+    """コンテンツ外領域（パディング）はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_upscale(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
+# ─── tile (pattern repeat) ──────────────────────────────────────────────────
+
+
+def test_tile_2x2_by2x2() -> None:
+    """2×2 グリッドを 2×2 タイル → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_h_only() -> None:
+    """縦方向のみ 2× タイル（横は 1×）。中間テンソルなし。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = [[1, 2, 3], [4, 5, 6], [1, 2, 3], [4, 5, 6]]
+    out = _run(B.build_tile(2, 3, 2, 1), g)
+    assert _argmax_grid(out, 4, 3) == expected
+
+
+def test_tile_padding_stays_zero() -> None:
+    """コンテンツ外領域はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
 @pytest.mark.parametrize(
     "model",
     [
@@ -144,6 +206,11 @@ def test_rot270_3x3() -> None:
         B.build_rot180(3, 3),
         B.build_rot90(3),
         B.build_rot270(3),
+        B.build_upscale(2, 2, 2, 2),
+        B.build_upscale(2, 3, 2, 1),
+        B.build_upscale(3, 2, 1, 2),
+        B.build_tile(2, 2, 2, 2),
+        B.build_tile(2, 3, 2, 1),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:

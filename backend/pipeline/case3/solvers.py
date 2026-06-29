@@ -41,6 +41,12 @@ def _const_dim(task: Task, *, axis: int) -> int | None:
     return next(iter(dims)) if len(dims) == 1 else None
 
 
+def _const_output_dim(task: Task, *, axis: int) -> int | None:
+    """全 example で出力グリッドの ``axis`` 次元が一定なら返す。"""
+    dims = {grid_shape(e.output)[axis] for e in task.valid_examples()}
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
 # --- geometric / trivial -----------------------------------------------------
 def solve_identity(task: Task) -> onnx.ModelProto | None:
     if _all(task, lambda e: e.input == e.output):
@@ -128,6 +134,66 @@ def solve_rot270(task: Task) -> onnx.ModelProto | None:
     ):
         return B.build_rot270(w)
     return None
+
+
+# --- scaling transforms (upscale / tile) ------------------------------------
+def _scale_detect(
+    task: Task,
+) -> tuple[int, int, int, int] | None:
+    """入出力寸法から (h, w, sh, sw) を返す。整数倍でなければ None。"""
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    oh = _const_output_dim(task, axis=0)
+    ow = _const_output_dim(task, axis=1)
+    if h is None or w is None or oh is None or ow is None:
+        return None
+    if oh % h != 0 or ow % w != 0:
+        return None
+    return h, w, oh // h, ow // w
+
+
+def solve_upscale(task: Task) -> onnx.ModelProto | None:
+    """NN アップスケール: output[r][c] == input[r // sh][c // sw]。"""
+    dims = _scale_detect(task)
+    if dims is None:
+        return None
+    h, w, sh, sw = dims
+    if sh == 1 and sw == 1:
+        return None  # identity で処理済み
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    for e in exs:
+        inp = _np(e.input)
+        out = _np(e.output)
+        oh, ow = len(e.output), len(e.output[0])
+        r_idx = np.arange(oh) // sh
+        c_idx = np.arange(ow) // sw
+        if not np.array_equal(out, inp[np.ix_(r_idx, c_idx)]):
+            return None
+    return B.build_upscale(h, w, sh, sw)
+
+
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """タイル: output[r][c] == input[r % h][c % w]。"""
+    dims = _scale_detect(task)
+    if dims is None:
+        return None
+    h, w, nh, nw = dims
+    if nh == 1 and nw == 1:
+        return None  # identity
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    for e in exs:
+        inp = _np(e.input)
+        out = _np(e.output)
+        oh, ow = len(e.output), len(e.output[0])
+        r_idx = np.arange(oh) % h
+        c_idx = np.arange(ow) % w
+        if not np.array_equal(out, inp[np.ix_(r_idx, c_idx)]):
+            return None
+    return B.build_tile(h, w, nh, nw)
 
 
 # --- recolor (global color map) ---------------------------------------------
@@ -229,6 +295,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
+    ("upscale", solve_upscale),
+    ("tile", solve_tile),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),

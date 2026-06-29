@@ -123,3 +123,67 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def _upscale_idx(content_size: int, scale: int) -> list[int]:
+    """NN アップスケール用インデックス: [0]*scale + [1]*scale + ... + padding。"""
+    idx = [r for r in range(content_size) for _ in range(scale)]
+    idx += list(range(content_size * scale, GRID_MAX))
+    return idx
+
+
+def _tile_idx(content_size: int, n_tiles: int) -> list[int]:
+    """タイル用インデックス: [0..size-1] を n_tiles 回繰り返し + padding。"""
+    idx = list(range(content_size)) * n_tiles
+    idx += list(range(content_size * n_tiles, GRID_MAX))
+    return idx
+
+
+def _gather_hw(
+    h_idx: list[int],
+    w_idx: list[int],
+    *,
+    do_h: bool,
+    do_w: bool,
+) -> onnx.ModelProto:
+    """H / W 軸への Gather を 1 本または 2 本（中間テンソルあり）で組む。
+
+    do_h=True, do_w=False → axis=2 Gather のみ（input→output、中間テンソルなし）。
+    do_h=False, do_w=True → axis=3 Gather のみ。
+    do_h=True, do_w=True → H Gather → 中間テンソル「t」 → W Gather。
+    """
+    if do_h and do_w:
+        h_init = helper.make_tensor("hidx", TensorProto.INT64, [GRID_MAX], h_idx)
+        w_init = helper.make_tensor("widx", TensorProto.INT64, [GRID_MAX], w_idx)
+        g1 = helper.make_node("Gather", ["input", "hidx"], ["t"], axis=2)
+        g2 = helper.make_node("Gather", ["t", "widx"], ["output"], axis=3)
+        return _model([g1, g2], [h_init, w_init])
+    if do_h:
+        init = helper.make_tensor("hidx", TensorProto.INT64, [GRID_MAX], h_idx)
+        node = helper.make_node("Gather", ["input", "hidx"], ["output"], axis=2)
+        return _model([node], [init])
+    # do_w のみ
+    init = helper.make_tensor("widx", TensorProto.INT64, [GRID_MAX], w_idx)
+    node = helper.make_node("Gather", ["input", "widx"], ["output"], axis=3)
+    return _model([node], [init])
+
+
+def build_upscale(h: int, w: int, sh: int, sw: int) -> onnx.ModelProto:
+    """NN アップスケール: 入力 h×w を sh 倍（縦）× sw 倍（横）に拡大。
+
+    各ピクセルが sh×sw ブロックに置き換わる。params = 30（単軸）or 60（両軸）。
+    両軸スケール時は中間テンソル 1 本（memory = 36000 bytes）が発生する。
+    """
+    h_idx = _upscale_idx(h, sh) if sh > 1 else list(range(GRID_MAX))
+    w_idx = _upscale_idx(w, sw) if sw > 1 else list(range(GRID_MAX))
+    return _gather_hw(h_idx, w_idx, do_h=(sh > 1), do_w=(sw > 1))
+
+
+def build_tile(h: int, w: int, nh: int, nw: int) -> onnx.ModelProto:
+    """タイル: 入力 h×w パターンを縦 nh 回・横 nw 回繰り返す。
+
+    output[r][c] = input[r % h][c % w]。params = 30 or 60。
+    """
+    h_idx = _tile_idx(h, nh) if nh > 1 else list(range(GRID_MAX))
+    w_idx = _tile_idx(w, nw) if nw > 1 else list(range(GRID_MAX))
+    return _gather_hw(h_idx, w_idx, do_h=(nh > 1), do_w=(nw > 1))

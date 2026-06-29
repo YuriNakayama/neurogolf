@@ -218,6 +218,89 @@ def test_solve_floodfill_recolor_not_applicable() -> None:
     assert solvers.solve_floodfill(_task(inp, out)) is None
 
 
+# ─── upscale ───────────────────────────────────────────────────────────────
+
+
+def test_solve_upscale_2x2_by2() -> None:
+    """2×2 グリッドを 2× アップスケールして audit を通過する。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    model = solvers.solve_upscale(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_upscale_h_only() -> None:
+    """縦方向のみ 2× スケール（コスト最小: 中間テンソルなし）。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out = [[1, 2, 3], [1, 2, 3], [4, 5, 6], [4, 5, 6]]
+    model = solvers.solve_upscale(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_upscale_identity_returns_none() -> None:
+    """同サイズ出力（スケール 1×1）は identity で処理すべきで None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_upscale(_task(g, g)) is None
+
+
+def test_solve_upscale_flip_returns_none() -> None:
+    """フリップはアップスケールではない。"""
+    g = [[1, 2], [3, 4]]
+    flipped = [[2, 1], [4, 3]]
+    assert solvers.solve_upscale(_task(g, flipped)) is None
+
+
+def test_solve_upscale_non_integer_scale_returns_none() -> None:
+    """入出力サイズが整数倍でない場合は None を返す。"""
+    inp = [[1, 2, 3], [4, 5, 6]]  # 2×3
+    out = [[1, 2, 3, 1], [4, 5, 6, 4]]  # 2×4: 4/3 は整数でない
+    assert solvers.solve_upscale(_task(inp, out)) is None
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_by2() -> None:
+    """2×2 グリッドを 2×2 タイルして audit を通過する。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_h_only() -> None:
+    """縦方向のみ 2× タイル（横は 1×）。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out = [[1, 2, 3], [4, 5, 6], [1, 2, 3], [4, 5, 6]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_identity_returns_none() -> None:
+    """同サイズ出力（タイル 1×1）は None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_upscale_pattern_returns_none() -> None:
+    """アップスケールパターン（各セルが繰り返す）はタイルではない。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
 def test_solve_floodfill_cost_below_threshold() -> None:
     """生成コスト < 10000 であること (基本的な小グリッドの上限チェック)。"""
     inp = [
