@@ -220,6 +220,23 @@ def solve_floodfill(task: Task) -> onnx.ModelProto | None:
     return build_floodfill_8conn(task.valid_examples())
 
 
+def solve_linsep_conv(task: Task) -> onnx.ModelProto | None:
+    """LP-based single-Conv for k-local linearly-separable tasks.
+
+    Tries k=3,5,7 (cheapest first). Cost = 100*k*k + 10 with memory=0.
+    Cheaper than lookup/residual for tasks that happen to be linearly separable
+    in the k×k one-hot patch space.
+    """
+    from .linsep import build_linsep_conv
+
+    exs = list(task.valid_examples())
+    for k in (3, 5, 7):
+        m = build_linsep_conv(exs, k)
+        if m is not None:
+            return m
+    return None
+
+
 # 適用順: cost が小さいものを先に（同点なら先勝ち）。検証側が cost 最小を選ぶので順序は目安。
 SOLVERS: list[tuple[str, Solver]] = [
     ("identity", solve_identity),
@@ -235,5 +252,6 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
+    ("linsep_conv", solve_linsep_conv),
     ("floodfill", solve_floodfill),
 ]
