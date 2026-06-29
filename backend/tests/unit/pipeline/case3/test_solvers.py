@@ -218,7 +218,71 @@ def test_solve_floodfill_recolor_not_applicable() -> None:
     assert solvers.solve_floodfill(_task(inp, out)) is None
 
 
-def test_solve_floodfill_cost_below_threshold() -> None:
+# ─── scale ─────────────────────────────────────────────────────────────────
+
+
+def test_solve_scale_2x() -> None:
+    """各セルを 2×2 ブロックに拡大する。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    model = solvers.solve_scale(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_asymmetric() -> None:
+    """縦 3 倍・横 2 倍のズーム。"""
+    inp = [[1, 2, 3]]
+    out = [[1, 1, 2, 2, 3, 3], [1, 1, 2, 2, 3, 3], [1, 1, 2, 2, 3, 3]]
+    model = solvers.solve_scale(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_not_scale_returns_none() -> None:
+    """tile パターン（scale ではない）は None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    assert solvers.solve_scale(_task(inp, out)) is None
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2() -> None:
+    """2×2 グリッドを 2×2 回タイリング。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_horizontal_only() -> None:
+    """横方向のみタイリング（縦 1 回）。"""
+    inp = [[1, 2, 3]]
+    out = [[1, 2, 3, 1, 2, 3, 1, 2, 3]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_not_tile_returns_none() -> None:
+    """scale パターン（tile ではない）は None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_scale_cost_below_threshold() -> None:
     """生成コスト < 10000 であること (基本的な小グリッドの上限チェック)。"""
     inp = [
         [0, 0, 0, 0, 0],

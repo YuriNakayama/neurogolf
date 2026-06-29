@@ -13,7 +13,7 @@ import numpy as np
 import onnx
 
 from . import builders as B
-from .arc import NUM_COLORS, Example, Task, grid_shape
+from .arc import GRID_MAX, NUM_COLORS, Example, Task, grid_shape
 from .floodfill import build_floodfill_8conn
 from .lookup import _build_table
 from .residual import build_residual
@@ -220,6 +220,78 @@ def solve_floodfill(task: Task) -> onnx.ModelProto | None:
     return build_floodfill_8conn(task.valid_examples())
 
 
+def _detect_scale(
+    examples: tuple[Example, ...],
+) -> tuple[int, int, int, int] | None:
+    """全 example が一様なスケールアップなら (h, w, sh, sw) を返す。"""
+    dims: set[tuple[int, int, int, int]] = set()
+    for e in examples:
+        h_in, w_in = grid_shape(e.input)
+        h_out, w_out = grid_shape(e.output)
+        if h_out % h_in != 0 or w_out % w_in != 0:
+            return None
+        sh, sw = h_out // h_in, w_out // w_in
+        if sh == 1 and sw == 1:
+            return None  # identity handled elsewhere
+        a, b = _np(e.input), _np(e.output)
+        for r in range(h_out):
+            for c in range(w_out):
+                if b[r, c] != a[r // sh, c // sw]:
+                    return None
+        dims.add((h_in, w_in, sh, sw))
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
+def solve_scale(task: Task) -> onnx.ModelProto | None:
+    """各セルを sh×sw ブロックにズームアップ。"""
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    params = _detect_scale(exs)
+    if params is None:
+        return None
+    h, w, sh, sw = params
+    if h * sh > GRID_MAX or w * sw > GRID_MAX:
+        return None
+    return B.build_scale(h, w, sh, sw)
+
+
+def _detect_tile(
+    examples: tuple[Example, ...],
+) -> tuple[int, int, int, int] | None:
+    """全 example が一様なタイリングなら (h, w, rh, rw) を返す。"""
+    dims: set[tuple[int, int, int, int]] = set()
+    for e in examples:
+        h_in, w_in = grid_shape(e.input)
+        h_out, w_out = grid_shape(e.output)
+        if h_out % h_in != 0 or w_out % w_in != 0:
+            return None
+        rh, rw = h_out // h_in, w_out // w_in
+        if rh == 1 and rw == 1:
+            return None  # identity handled elsewhere
+        a, b = _np(e.input), _np(e.output)
+        for r in range(h_out):
+            for c in range(w_out):
+                if b[r, c] != a[r % h_in, c % w_in]:
+                    return None
+        dims.add((h_in, w_in, rh, rw))
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """h×w グリッドを rh×rw 回タイリング。"""
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    params = _detect_tile(exs)
+    if params is None:
+        return None
+    h, w, rh, rw = params
+    if h * rh > GRID_MAX or w * rw > GRID_MAX:
+        return None
+    return B.build_tile(h, w, rh, rw)
+
+
 # 適用順: cost が小さいものを先に（同点なら先勝ち）。検証側が cost 最小を選ぶので順序は目安。
 SOLVERS: list[tuple[str, Solver]] = [
     ("identity", solve_identity),
@@ -232,6 +304,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
+    ("scale", solve_scale),
+    ("tile", solve_tile),
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),

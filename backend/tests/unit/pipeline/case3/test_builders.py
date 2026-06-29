@@ -135,6 +135,61 @@ def test_rot270_3x3() -> None:
 # ─── onnx.checker pass ─────────────────────────────────────────────────────
 
 
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_tile_2x2_reps2x2() -> None:
+    """2×2 グリッドを 2×2 回タイリング → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_1x3_reps1x3() -> None:
+    """1×3 グリッドを 1×3 回タイリング → 1×9。"""
+    g = [[1, 2, 3]]
+    expected = [[1, 2, 3, 1, 2, 3, 1, 2, 3]]
+    out = _run(B.build_tile(1, 3, 1, 3), g)
+    assert _argmax_grid(out, 1, 9) == expected
+
+
+def test_tile_padding_stays_zero() -> None:
+    """タイリング領域外 (row >= reps_h*h) はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+
+
+# ─── scale ─────────────────────────────────────────────────────────────────
+
+
+def test_scale_2x2_factor2x2() -> None:
+    """2×2 グリッドを 2×2 倍ズーム → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    out = _run(B.build_scale(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_scale_3x1_factor2x3() -> None:
+    """3×1 グリッドを 2×3 倍ズーム → 6×3。"""
+    g = [[1], [2], [3]]
+    expected = [[1, 1, 1], [1, 1, 1], [2, 2, 2], [2, 2, 2], [3, 3, 3], [3, 3, 3]]
+    out = _run(B.build_scale(3, 1, 2, 3), g)
+    assert _argmax_grid(out, 6, 3) == expected
+
+
+def test_scale_padding_stays_zero() -> None:
+    """スケール領域外はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+
+
+# ─── onnx.checker pass ─────────────────────────────────────────────────────
+
+
 @pytest.mark.parametrize(
     "model",
     [
@@ -144,6 +199,8 @@ def test_rot270_3x3() -> None:
         B.build_rot180(3, 3),
         B.build_rot90(3),
         B.build_rot270(3),
+        B.build_tile(2, 2, 2, 2),
+        B.build_scale(2, 2, 2, 2),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
