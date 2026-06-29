@@ -239,3 +239,46 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── panels (LR/TB, OR/AND/XOR/DIFF) ─────────────────────────────────────────
+
+
+def test_solve_panels_lr_or() -> None:
+    """LR 分割・OR: 左右どちらかに非背景があれば色 3 で塗る。"""
+    inp = [[1, 0, 0, 2], [0, 0, 0, 0]]
+    out = [[3, 3], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_lrsep_and() -> None:
+    """LRsep 分割（セパレータ列あり）・AND: 両パネルに非背景があるセルのみ色 3。"""
+    inp = [[1, 1, 9, 1, 1], [1, 0, 9, 0, 1]]
+    out = [[3, 3], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_tb_or() -> None:
+    """TB 分割（上下）・OR: 上下どちらかに非背景があれば色 3 で塗る。"""
+    inp = [[1, 0], [0, 0], [0, 2], [0, 0]]
+    out = [[3, 3], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_not_applicable_returns_none() -> None:
+    """パネル分割で表現できないタスクは None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[4, 3], [2, 1]]
+    assert solvers.solve_panels(_task(inp, out)) is None

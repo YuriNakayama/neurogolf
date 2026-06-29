@@ -16,6 +16,7 @@ from . import builders as B
 from .arc import NUM_COLORS, Example, Task, grid_shape
 from .floodfill import build_floodfill_8conn
 from .lookup import _build_table
+from .panels import build_panels
 from .residual import build_residual
 from .smalllookup import build_small_lookup
 
@@ -163,6 +164,12 @@ def solve_recolor(task: Task) -> onnx.ModelProto | None:
     return B.build_recolor(mapping)
 
 
+# --- panels (LR / LRsep / TB / TBsep with OR/AND/XOR/DIFF) -----------------
+def solve_panels(task: Task) -> onnx.ModelProto | None:
+    """左右または上下 2 パネルの論理合成（OR/AND/XOR/DIFF）を小空間グラフで厳密構成。"""
+    return build_panels(task.valid_examples())
+
+
 # --- constant output (output identical across all examples) ------------------
 def solve_constant(task: Task) -> onnx.ModelProto | None:
     outs = {tuple(map(tuple, e.output)) for e in task.valid_examples()}
@@ -232,6 +239,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
+    ("panels", solve_panels),
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
