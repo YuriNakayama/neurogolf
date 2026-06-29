@@ -39,8 +39,20 @@
    作業データ（task json/utils/floor onnx）は scratchpad（リポジトリ外）に退避してから処理する。
    official utils 利用には onnx_tool/ipython/matplotlib を --with で追加要。
 
+## cycle7 追記: frank/consolidated-audit 2-task harvest → 7180.46（ACCEPT, +0.01）
+
+7180.45 floor を基準に追加バンドルを harvest:
+- **mirzayasirabdullah07/top-score（94票）**: 0 win（combined 未達）。
+- **franksunp/neurogolf-consolidated-audit**: t233(59227→58327) t358(4494→4486) の 2 win（faithful n_fail=0）。
+- lucifer19（onnx 非出力, log のみ）/ biohack44（DL ハング, submission.zip 取得不可）はスキップ。
+- 実 submit ref 54166919 = **Public Score 7180.46**（+0.01, 予測 +0.017 と整合）。dvc push 済み。
+  なお別の並行エージェントも harishk cherry-pick で 7180.45 到達を観測（複数 autonomous が同一ツリーで稼働）。
+
 ## 次の一手
 
-- 新 floor = **7180.45**, 7950 まで −769.6。次サイクルは引き続き公開 notebook 再スキャン
-  （lucifer19/biohack44 等 DL 不安定バンドルの再取得 + 新規高 LB バンドルの cherry-pick）。
+- 新 floor = **7180.46**, 7950 まで −769.5。次サイクルは引き続き公開 notebook 再スキャン
+  （新規高 LB バンドルの cherry-pick）。biohack44/lucifer19 は出力形式が非標準で再取得困難。
 - harvest が枯れた場合は per-task 真アルゴリズム手 golf（generalization-gate 必須）に戻る。
+- 注意: main への直接 push / gh merge は auto-mode classifier にブロックされ、並行エージェントが
+  作業ツリーのブランチを随時リセットする。成果は origin の PR ブランチ + dvc remote に push して永続化する
+  （win 自体は Kaggle が最良提出を保持するため確定・退行なし）。
