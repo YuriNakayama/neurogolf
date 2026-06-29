@@ -148,3 +148,42 @@ def test_rot270_3x3() -> None:
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
     onnx.checker.check_model(model, full_check=True)
+
+
+# ─── build_tile ────────────────────────────────────────────────────────────
+
+
+def test_tile_2x2_to_4x4() -> None:
+    """2×2 グリッドを 4×4 にタイリング（縦横 2 倍）。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    out = _run(B.build_tile(2, 2, 4, 4), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_1x3_to_3x3() -> None:
+    """1×3 グリッドを 3×3 にタイリング（縦 3 倍）。"""
+    g = [[1, 2, 3]]
+    expected = [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
+    out = _run(B.build_tile(1, 3, 3, 3), g)
+    assert _argmax_grid(out, 3, 3) == expected
+
+
+def test_tile_2x3_horizontal() -> None:
+    """1×3 グリッドを 1×6 にタイリング（横 2 倍のみ）。"""
+    g = [[1, 2, 3]]
+    expected = [[1, 2, 3, 1, 2, 3]]
+    out = _run(B.build_tile(1, 3, 1, 6), g)
+    assert _argmax_grid(out, 1, 6) == expected
+
+
+def test_tile_padding_stays_zero() -> None:
+    """タイル後の枠外（>= oh 行 / >= ow 列）は zero-hot のまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 4, 4), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
+def test_tile_onnx_checker_passes() -> None:
+    onnx.checker.check_model(B.build_tile(2, 2, 4, 4), full_check=True)

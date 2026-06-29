@@ -123,3 +123,24 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def build_tile(ih: int, iw: int, oh: int, ow: int) -> onnx.ModelProto:
+    """input の ih×iw グリッドを oh×ow にタイリング（kh=oh//ih, kw=ow//iw 倍）。
+
+    Gather(axis=2) で行方向を mod-wrap し、続く Gather(axis=3) で列方向を wrap する。
+    oh..29 行 / ow..29 列 は入力の zero-hot 領域（行 ih / 列 iw）を指すため 0 のまま。
+    """
+    hidx = [r % ih for r in range(oh)]
+    if oh < GRID_MAX:
+        hidx += [ih] * (
+            GRID_MAX - oh
+        )  # ih <= 29 when oh < 30 (caller guarantees kh>=1)
+    widx = [c % iw for c in range(ow)]
+    if ow < GRID_MAX:
+        widx += [iw] * (GRID_MAX - ow)
+    h_init = helper.make_tensor("hidx", TensorProto.INT64, [GRID_MAX], hidx)
+    w_init = helper.make_tensor("widx", TensorProto.INT64, [GRID_MAX], widx)
+    g1 = helper.make_node("Gather", ["input", "hidx"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "widx"], ["output"], axis=3)
+    return _model([g1, g2], [h_init, w_init])
