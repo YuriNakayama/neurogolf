@@ -19,6 +19,16 @@
 - 共通: 高コスト帯は真に複雑な非局所ルール。公開 net はこれを near-optimal に実装しており、
   k-local/単純置換の独自回路では下回れない（過去 ~10 セッション + 本サイクルで再確認）。
 
+### 4. 自前ソルババンク全種 vs floor（決定的網羅検査）
+- 全 SOLVERS を全 400 タスクで構成 → **145 構成成功、floor 未満は 2 候補のみ、両方 INCORRECT → 0 win**。
+- t002[floodfill] 18025<21089 だが n_fail=268（全滅）。t251[floodfill] 4633<4920 だが n_fail=1。
+- t251 の唯一の失敗例(arc-gen#74, 9×9): 4 方を 2 で囲まれた**単一セル (3,4) まで誤って色1で充填**。
+  真の出力はこれを 0 のまま残す。= 自前 floodfill は「囲み領域を全て充填」という**過度に一般化した
+  誤ルール**で、train/test では偶然一致するが arc-gen の hidden 例で破綻。真ルール（特定形状/サイズの
+  囲みのみ充填）は公開 net(4920)が正しく実装済みで、安く正しくは作れない。
+- **結論: 現行プリミティブ（residual/lookup/small_lookup/small_residual/floodfill/recolor/geom）では
+  floor を一切破れない。** 公開包絡線 7180.55 は現プリミティブで到達可能な天井。
+
 ## 採否
 - 提出候補（floor 未満の独自 net）が 0 のため **submit せず**（floor 7180.55 維持、退行ゼロ）。
 - small_residual ソルバ自体はテスト緑で原設計ツールバンクに追加（floor は変えないが from-scratch
