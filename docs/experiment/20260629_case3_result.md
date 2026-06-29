@@ -90,3 +90,14 @@ hidden 安全（grader-faithfulness law）。
 主力レバー。graded 公開バンドルの cross-bundle cherry-pick は hidden 安全に転送する
 （cycle1 の学習 fit とは対照的）。**定期的に公開 notebook を確認し新バンドルを cherry-pick** すべき。
 新 floor = **7176.49**, 7950 まで −773.5。
+
+## cycle 5 追記: 追加公開バンドル harvest → 0 win（floor 7176.49 維持）
+
+cycle4 の harvest を追加ソースで継続:
+- **hoangvux/neurogolf**（400 onnx, 2.9M = golf 不足）: 現 floor(7176.49) を 1 タスクも下回らず **0 win**。
+- **seddiktrk/all-graph-surgeries**: submission.zip 展開 0 onnx（別構造）でスキップ。
+- **biohack44/neurogolf-new-best-public-bundle**: kernels output DL が繰り返しハング（取得不可）。
+  → 次サイクルで再試行候補。
+
+cycle5 は追加 win 無し。floor **7176.49** 維持（cycle4 の boristown ベース cherry-pick が現状最善）。
+次サイクル方針: biohack44 等未取得バンドルの再 DL + 新規公開 notebook の定期再スキャン（harvest 継続）。
