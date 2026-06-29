@@ -34,3 +34,14 @@
 - hand-golf の現実的な勝ち筋は bit-pack 表現での per-task 設計のみ（高難度）。当面は
   **新規公開バンドルの定期監視 harvest**（受動だが実証済みレバー）を主とし、bit-pack 設計は
   研究課題として継続。7950 まで −769.4。
+
+## 追記: flood-fill hand-golf の構造的限界を確定（t251 でも同結論）
+
+- t251（cost 4920, max dim 12, fill=1）も enclosed-fill と一致するが、unrolled-dilation の
+  **cost ≈ node_count × 3600B**（ORT profiler が各中間テンソルの peak を加算）。
+  K=15・~200 nodes でも ~720k >> 4920。**grid サイズに依らず cost は unroll 深に比例**するため
+  flood-fill 系は floor を破れない。
+- **構造的結論**: 空間 unrolled-dilation による flood-fill 再構築は、正答しても cost が
+  node 数に線形比例して爆発し、bit-pack floor net に原理的に勝てない。flood-fill タスク群
+  （t002/t251/t367 等）の hand-golf 路線は棄却。
+- 残る hand-golf 勝ち筋は **bit-pack 表現での per-task 設計**のみ（floor と同系統で更に削る、高難度）。
