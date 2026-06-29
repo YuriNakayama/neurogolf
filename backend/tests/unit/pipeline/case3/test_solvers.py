@@ -239,3 +239,112 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── panels ────────────────────────────────────────────────────────────────
+# Input: 左右(LR)または上下(TB)の 2 パネルを論理演算で合成するタスク。
+
+
+def _lr_task(
+    left: list[list[int]], right: list[list[int]], out: list[list[int]]
+) -> Task:
+    """左右 2 パネル（LR レイアウト）の入力グリッドを構築。"""
+    oh = len(left)
+    inp = [left[r] + right[r] for r in range(oh)]
+    return Task(
+        num=1,
+        train=(Example(input=inp, output=out),),
+        test=(),
+        arc_gen=(),
+    )
+
+
+def _lr_examples(
+    left: list[list[int]], right: list[list[int]], out: list[list[int]]
+) -> dict[str, Any]:
+    oh = len(left)
+    inp = [left[r] + right[r] for r in range(oh)]
+    return _examples(inp, out)
+
+
+def test_solve_panels_lr_or() -> None:
+    """LR レイアウト OR: 非背景セルの論理和を 1 色で出力。"""
+    left = [[1, 0], [0, 0]]
+    right = [[0, 0], [0, 2]]
+    out = [[3, 0], [0, 3]]
+    task = _lr_task(left, right, out)
+    model = solvers.solve_panels(task)
+    assert model is not None
+    res = _run_audit(model, _lr_examples(left, right, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_lr_and() -> None:
+    """LR レイアウト AND: 両パネルが非背景な交差セルだけを出力。"""
+    left = [[1, 1], [0, 1]]
+    right = [[1, 0], [0, 1]]
+    out = [[4, 0], [0, 4]]
+    task = _lr_task(left, right, out)
+    model = solvers.solve_panels(task)
+    assert model is not None
+    res = _run_audit(model, _lr_examples(left, right, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_lr_xor() -> None:
+    """LR レイアウト XOR: 片方のみ非背景なセルを出力。"""
+    left = [[1, 0], [1, 0]]
+    right = [[1, 1], [0, 0]]
+    out = [[0, 5], [5, 0]]
+    task = _lr_task(left, right, out)
+    model = solvers.solve_panels(task)
+    assert model is not None
+    res = _run_audit(model, _lr_examples(left, right, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_lr_diff() -> None:
+    """LR レイアウト DIFF: 左パネルにあり右パネルにないセルを出力。"""
+    left = [[1, 1], [0, 1]]
+    right = [[1, 0], [0, 0]]
+    out = [[0, 6], [0, 6]]
+    task = _lr_task(left, right, out)
+    model = solvers.solve_panels(task)
+    assert model is not None
+    res = _run_audit(model, _lr_examples(left, right, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_tb_or() -> None:
+    """TB レイアウト OR: 上下 2 パネルの論理和。"""
+    top = [[1, 0], [0, 0]]
+    bot = [[0, 0], [0, 1]]
+    out = [[7, 0], [0, 7]]
+    inp = top + bot
+    task = Task(
+        num=1,
+        train=(Example(input=inp, output=out),),
+        test=(),
+        arc_gen=(),
+    )
+    model = solvers.solve_panels(task)
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_not_applicable_returns_none() -> None:
+    """パネル合成でないタスクは None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_panels(_task(g, g)) is None
+
+
+def test_solve_panels_in_solvers_list() -> None:
+    """solve_panels が SOLVERS リストに含まれていることを確認。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "panels" in names
