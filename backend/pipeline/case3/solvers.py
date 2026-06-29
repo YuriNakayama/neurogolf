@@ -41,6 +41,26 @@ def _const_dim(task: Task, *, axis: int) -> int | None:
     return next(iter(dims)) if len(dims) == 1 else None
 
 
+def _const_out_dim(task: Task, *, axis: int) -> int | None:
+    """全 example で出力グリッドの ``axis`` 次元が一定なら返す。"""
+    dims = {grid_shape(e.output)[axis] for e in task.valid_examples()}
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
+def _mosaic_np(g: np.ndarray, rh: int, rw: int) -> np.ndarray:
+    """NumPy で mirror-tile を計算（ソルバー検証用）。"""
+    rows: list[np.ndarray] = []
+    for r in range(rh):
+        blocks: list[np.ndarray] = []
+        for c in range(rw):
+            b = g if (r % 2 == 0) else g[::-1]
+            if c % 2:
+                b = b[:, ::-1]
+            blocks.append(b)
+        rows.append(np.concatenate(blocks, axis=1))
+    return np.concatenate(rows, axis=0)
+
+
 # --- geometric / trivial -----------------------------------------------------
 def solve_identity(task: Task) -> onnx.ModelProto | None:
     if _all(task, lambda e: e.input == e.output):
@@ -101,6 +121,24 @@ def solve_transpose(task: Task) -> onnx.ModelProto | None:
         ),
     ):
         return B.build_permute_axes((0, 1, 3, 2))
+    return None
+
+
+def solve_anti_transpose(task: Task) -> onnx.ModelProto | None:
+    """反対角線ミラー: output[r][c] = input[H-1-c][W-1-r]。"""
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    if h is None or w is None:
+        return None
+    if _all(
+        task,
+        lambda e: (
+            len(e.output) == w
+            and len(e.output[0]) == h
+            and _np(e.output).tolist() == _np(e.input)[::-1, ::-1].T.tolist()
+        ),
+    ):
+        return B.build_anti_transpose(h, w)
     return None
 
 
@@ -193,6 +231,91 @@ def _build_constant(grid: list[list[int]]) -> onnx.ModelProto:
     return B._model([const], [])
 
 
+# --- size-changing geometric (scale / tile / mosaic) -------------------------
+
+
+def _size_factors(
+    task: Task,
+) -> tuple[int, int, int, int] | None:
+    """(h_in, w_in, fh, fw) を返す。入出力の各次元が一定でかつ整数比でなければ None。"""
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    oh = _const_out_dim(task, axis=0)
+    ow = _const_out_dim(task, axis=1)
+    if h is None or w is None or oh is None or ow is None:
+        return None
+    if oh % h or ow % w:
+        return None
+    fh, fw = oh // h, ow // w
+    if fh == 1 and fw == 1:
+        return None
+    if fh * h > B.GRID_MAX or fw * w > B.GRID_MAX:
+        return None
+    return h, w, fh, fw
+
+
+def solve_scale(task: Task) -> onnx.ModelProto | None:
+    """ブロック複製拡大: 各セルが sh×sw ブロックになる。"""
+    dims = _size_factors(task)
+    if dims is None:
+        return None
+    h, w, sh, sw = dims
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist()
+        == np.repeat(np.repeat(_np(e.input), sh, axis=0), sw, axis=1).tolist(),
+    ):
+        return B.build_scale(h, w, sh, sw)
+    return None
+
+
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """h×w グリッドを rh×rw 回タイル。"""
+    dims = _size_factors(task)
+    if dims is None:
+        return None
+    h, w, rh, rw = dims
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist()
+        == np.tile(_np(e.input), (rh, rw)).tolist(),
+    ):
+        return B.build_tile(h, w, rh, rw)
+    return None
+
+
+def solve_mosaic(task: Task) -> onnx.ModelProto | None:
+    """mirror-tile: 隣接コピーが反転して辺を共有する。"""
+    dims = _size_factors(task)
+    if dims is None:
+        return None
+    h, w, rh, rw = dims
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist() == _mosaic_np(_np(e.input), rh, rw).tolist(),
+    ):
+        return B.build_mosaic(h, w, rh, rw)
+    return None
+
+
+# --- single-color filter -----------------------------------------------------
+
+
+def solve_keep_color(task: Task) -> onnx.ModelProto | None:
+    """color c だけ残し（背景 0 は常に保持）、他を 0 にする。"""
+    if not _all(task, _same_shape):
+        return None
+    exs = task.valid_examples()
+    for color in range(1, NUM_COLORS):
+        if all(
+            _np(e.output).tolist()
+            == np.where(_np(e.input) == color, _np(e.input), 0).tolist()
+            for e in exs
+        ):
+            return B.build_keep_color(color)
+    return None
+
+
 # --- neighborhood lookup / residual (algorithmic, small-space) ---------------
 def _min_k(task: Task) -> int | None:
     for k in (1, 3, 5):
@@ -224,6 +347,7 @@ def solve_floodfill(task: Task) -> onnx.ModelProto | None:
 SOLVERS: list[tuple[str, Solver]] = [
     ("identity", solve_identity),
     ("transpose", solve_transpose),
+    ("anti_transpose", solve_anti_transpose),
     ("flip_v", solve_flip_v),
     ("flip_h", solve_flip_h),
     ("rot180", solve_rot180),
@@ -232,6 +356,10 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
+    ("scale", solve_scale),
+    ("tile", solve_tile),
+    ("mosaic", solve_mosaic),
+    ("keep_color", solve_keep_color),
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
