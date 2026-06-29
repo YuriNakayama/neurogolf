@@ -239,3 +239,45 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── panels ────────────────────────────────────────────────────────────────
+
+
+def test_solve_panels_lr_or() -> None:
+    """左右 2 パネルの OR 合成: 片方でも非ゼロな位置をカラー 3 で出力。"""
+    # input 2×4: left=[[1,0],[0,0]], right=[[0,2],[0,0]] → OR=[[T,T],[F,F]]
+    inp = [[1, 0, 0, 2], [0, 0, 0, 0]]
+    out = [[3, 3], [0, 0]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+    assert res["cost"] is not None and res["cost"] < 2000
+
+
+def test_solve_panels_tb_and() -> None:
+    """上下 2 パネルの AND 合成: 両方が非ゼロな位置のみカラー 3 で出力。"""
+    # input 4×2: top=[[1,0],[0,1]], bottom=[[0,1],[1,1]] → AND=[[F,F],[F,T]]
+    inp = [[1, 0], [0, 1], [0, 1], [1, 1]]
+    out = [[0, 0], [0, 3]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_not_applicable() -> None:
+    """panels に合致しないタスク（単純な同値）は None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_panels(_task(g, g)) is None
+
+
+def test_solve_panels_multi_color_output_returns_none() -> None:
+    """出力に複数の非ゼロ色が含まれる場合は None を返す（panels 不可）。"""
+    # output に 2 色あると detect_panels が None を返す
+    inp = [[1, 0, 0, 2], [0, 0, 0, 0]]
+    out = [[3, 4], [0, 0]]  # color 3 と 4 が混在
+    assert solvers.solve_panels(_task(inp, out)) is None
