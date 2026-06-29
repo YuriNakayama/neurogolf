@@ -239,3 +239,34 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── panels ────────────────────────────────────────────────────────────────
+
+
+def test_solve_panels_lr_or() -> None:
+    """LR layout, OR: 左右どちらかが非ゼロなら color=2 を出力。"""
+    inp = [[1, 0, 0, 1], [0, 1, 1, 0]]
+    out = [[2, 2], [2, 2]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_lr_and() -> None:
+    """LR layout, AND: 左右両方が非ゼロのセルのみ color=3 を出力。"""
+    inp = [[1, 0, 1, 0], [0, 1, 0, 1]]
+    out = [[3, 0], [0, 3]]
+    model = solvers.solve_panels(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_panels_returns_none_for_non_panel() -> None:
+    """パネル構造がないタスク（出力色が複数）は None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_panels(_task(g, g)) is None
