@@ -348,3 +348,69 @@ def test_solve_panels_in_solvers_list() -> None:
     """solve_panels が SOLVERS リストに含まれていることを確認。"""
     names = [name for name, _ in solvers.SOLVERS]
     assert "panels" in names
+
+
+# ─── scale (ブロック拡大) ───────────────────────────────────────────────────
+
+
+def test_solve_scale_2x2_by_2() -> None:
+    """2×2 → 4×4 のブロック拡大タスクを solve_scale が解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    model = solvers.solve_scale(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_same_size_returns_none() -> None:
+    """入出力同サイズは scale でない。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_scale(_task(g, g)) is None
+
+
+def test_solve_scale_non_integer_ratio_returns_none() -> None:
+    """整数比でない変換は None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 3], [4, 5, 6]]  # 2×2 → 2×3 は比が整数でない
+    assert solvers.solve_scale(_task(inp, out)) is None
+
+
+def test_solve_scale_in_solvers_list() -> None:
+    """solve_scale が SOLVERS リストに含まれていることを確認。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "scale" in names
+
+
+# ─── tile (タイル繰り返し) ──────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_by_2() -> None:
+    """2×2 → 4×4 のタイルタスクを solve_tile が解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_same_size_returns_none() -> None:
+    """入出力同サイズは tile でない。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_scale_pattern_returns_none() -> None:
+    """scale パターン（ブロック拡大）は tile で None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_in_solvers_list() -> None:
+    """solve_tile が SOLVERS リストに含まれていることを確認。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile" in names

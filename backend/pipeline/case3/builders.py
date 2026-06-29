@@ -123,3 +123,45 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def _scale_index(n: int, factor: int) -> list[int]:
+    """出力位置→入力位置マップ（最近傍アップスケール）。超過分は row/col 29 で埋める。"""
+    scaled = min(n * factor, GRID_MAX)
+    out = [i // factor for i in range(scaled)]
+    return out + [GRID_MAX - 1] * (GRID_MAX - scaled)
+
+
+def _tile_index(n: int, reps: int) -> list[int]:
+    """出力位置→入力位置マップ（タイル繰り返し）。超過分は row/col 29 で埋める。"""
+    base = (list(range(n)) * reps)[:GRID_MAX]
+    return base + [GRID_MAX - 1] * (GRID_MAX - len(base))
+
+
+def build_scale(h: int, w: int, sh: int, sw: int) -> onnx.ModelProto:
+    """ブロック複製アップスケール (sh×sw 倍)。params = 60（index 2 本）。
+
+    各セルを sh×sw のブロックに拡大する。出力の有効域外は row/col 29（常にゼロ）から
+    Gather することでゼロパディングを維持する。
+    """
+    ridx = _scale_index(h, sh)
+    cidx = _scale_index(w, sw)
+    r_init = helper.make_tensor("ridx", TensorProto.INT64, [GRID_MAX], ridx)
+    c_init = helper.make_tensor("cidx", TensorProto.INT64, [GRID_MAX], cidx)
+    g1 = helper.make_node("Gather", ["input", "ridx"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "cidx"], ["output"], axis=3)
+    return _model([g1, g2], [r_init, c_init])
+
+
+def build_tile(h: int, w: int, reps_h: int, reps_w: int) -> onnx.ModelProto:
+    """タイル繰り返し (h×w グリッドを reps_h×reps_w 回並べる)。params = 60。
+
+    入力グリッドを縦横に繰り返す。有効域外は row/col 29 からの Gather でゼロを維持する。
+    """
+    ridx = _tile_index(h, reps_h)
+    cidx = _tile_index(w, reps_w)
+    r_init = helper.make_tensor("ridx", TensorProto.INT64, [GRID_MAX], ridx)
+    c_init = helper.make_tensor("cidx", TensorProto.INT64, [GRID_MAX], cidx)
+    g1 = helper.make_node("Gather", ["input", "ridx"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "cidx"], ["output"], axis=3)
+    return _model([g1, g2], [r_init, c_init])

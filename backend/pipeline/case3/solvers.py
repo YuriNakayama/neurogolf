@@ -164,6 +164,62 @@ def solve_recolor(task: Task) -> onnx.ModelProto | None:
     return B.build_recolor(mapping)
 
 
+# --- size-changing transforms (scale / tile) --------------------------------
+def _infer_int_ratio(task: Task) -> tuple[int, int, int, int] | None:
+    """全 example で入出力サイズが一定かつ比が整数なら (ih, iw, sh, sw) を返す。
+
+    入力サイズが example 間で異なる場合（可変サイズタスク）は None を返す。
+    """
+    sizes: set[tuple[int, int, int, int]] = set()
+    for e in task.valid_examples():
+        ih, iw = grid_shape(e.input)
+        oh, ow = grid_shape(e.output)
+        if ih == 0 or iw == 0 or oh % ih != 0 or ow % iw != 0:
+            return None
+        sizes.add((ih, iw, oh // ih, ow // iw))
+    if len(sizes) != 1:
+        return None
+    ih, iw, sh, sw = next(iter(sizes))
+    if sh == 1 and sw == 1:
+        return None
+    return ih, iw, sh, sw
+
+
+def solve_scale(task: Task) -> onnx.ModelProto | None:
+    """ブロック複製アップスケール: output[r][c] = input[r//sh][c//sw]。"""
+    r = _infer_int_ratio(task)
+    if r is None:
+        return None
+    ih, iw, sh, sw = r
+    if ih * sh > B.GRID_MAX or iw * sw > B.GRID_MAX:
+        return None
+    if _all(
+        task,
+        lambda e: (
+            _np(e.output).tolist()
+            == np.repeat(np.repeat(_np(e.input), sh, axis=0), sw, axis=1).tolist()
+        ),
+    ):
+        return B.build_scale(ih, iw, sh, sw)
+    return None
+
+
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """タイル繰り返し: output[r][c] = input[r % ih][c % iw]。"""
+    r = _infer_int_ratio(task)
+    if r is None:
+        return None
+    ih, iw, rh, rw = r
+    if ih * rh > B.GRID_MAX or iw * rw > B.GRID_MAX:
+        return None
+    if _all(
+        task,
+        lambda e: _np(e.output).tolist() == np.tile(_np(e.input), (rh, rw)).tolist(),
+    ):
+        return B.build_tile(ih, iw, rh, rw)
+    return None
+
+
 # --- constant output (output identical across all examples) ------------------
 def solve_constant(task: Task) -> onnx.ModelProto | None:
     outs = {tuple(map(tuple, e.output)) for e in task.valid_examples()}
@@ -234,6 +290,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
+    ("scale", solve_scale),
+    ("tile", solve_tile),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
