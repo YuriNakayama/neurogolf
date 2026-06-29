@@ -13,7 +13,7 @@ import numpy as np
 import onnx
 
 from . import builders as B
-from .arc import NUM_COLORS, Example, Task, grid_shape
+from .arc import GRID_MAX, NUM_COLORS, Example, Task, grid_shape
 from .floodfill import build_floodfill_8conn
 from .lookup import _build_table
 from .residual import build_residual
@@ -193,6 +193,37 @@ def _build_constant(grid: list[list[int]]) -> onnx.ModelProto:
     return B._model([const], [])
 
 
+# --- tiling -------------------------------------------------------------------
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """出力が入力グリッドの整数倍タイリングであれば ONNX を構築。
+
+    Slice + Tile + Pad の 3 ノード構成。cost = 12(params) + 40*h*w*(1+rh*rw) bytes。
+    rh=rw=1 は identity に任せるため対象外。
+    """
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    in_shapes = {grid_shape(e.input) for e in exs}
+    if len(in_shapes) != 1:
+        return None
+    h, w = next(iter(in_shapes))
+    out_shapes = {grid_shape(e.output) for e in exs}
+    if len(out_shapes) != 1:
+        return None
+    out_h, out_w = next(iter(out_shapes))
+    if out_h % h != 0 or out_w % w != 0:
+        return None
+    rh, rw = out_h // h, out_w // w
+    if rh == 1 and rw == 1:
+        return None
+    if out_h > GRID_MAX or out_w > GRID_MAX:
+        return None
+    for e in exs:
+        if _np(e.output).tolist() != np.tile(_np(e.input), (rh, rw)).tolist():
+            return None
+    return B.build_tile(h, w, rh, rw)
+
+
 # --- neighborhood lookup / residual (algorithmic, small-space) ---------------
 def _min_k(task: Task) -> int | None:
     for k in (1, 3, 5):
@@ -232,6 +263,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),
+    ("tile", solve_tile),
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),

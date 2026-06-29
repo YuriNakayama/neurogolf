@@ -123,3 +123,25 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def build_tile(h: int, w: int, rh: int, rw: int) -> onnx.ModelProto:
+    """h×w コンテンツを縦 rh・横 rw 回タイリングして 30×30 にゼロパッド。
+
+    cost = params(12) + memory(40*h*w*(1+rh*rw))。rh=rw=1 は呼び出し側が禁止。
+    Slice(opset10) + Tile(opset6) + Pad(opset2/attr) の 3 ノード構成。
+    """
+    sl_s = helper.make_tensor("sl_s", TensorProto.INT64, [4], [0, 0, 0, 0])
+    sl_e = helper.make_tensor("sl_e", TensorProto.INT64, [4], [1, NUM_COLORS, h, w])
+    reps = helper.make_tensor("reps", TensorProto.INT64, [4], [1, 1, rh, rw])
+    slice_node = helper.make_node("Slice", ["input", "sl_s", "sl_e"], ["sliced"])
+    tile_node = helper.make_node("Tile", ["sliced", "reps"], ["tiled"])
+    pad_h = GRID_MAX - h * rh
+    pad_w = GRID_MAX - w * rw
+    pad_node = helper.make_node(
+        "Pad",
+        ["tiled"],
+        ["output"],
+        pads=[0, 0, 0, 0, 0, 0, pad_h, pad_w],
+    )
+    return _model([slice_node, tile_node, pad_node], [sl_s, sl_e, reps])
