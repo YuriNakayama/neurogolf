@@ -123,3 +123,83 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def build_anti_transpose(h: int, w: int) -> onnx.ModelProto:
+    """反対角線ミラー: output[r][c] = input[H-1-c][W-1-r]。
+
+    Transpose(0,1,3,2) → Gather(rev_idx(w), axis=2) → Gather(rev_idx(h), axis=3)。
+    params = 60（2 つのインデックス初期化子）。
+    """
+    t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
+    g1 = helper.make_node("Gather", ["t", "idx_w"], ["u"], axis=2)
+    g2 = helper.make_node("Gather", ["u", "idx_h"], ["output"], axis=3)
+    w_init = helper.make_tensor("idx_w", TensorProto.INT64, [GRID_MAX], _rev_idx(w))
+    h_init = helper.make_tensor("idx_h", TensorProto.INT64, [GRID_MAX], _rev_idx(h))
+    return _model([t, g1, g2], [w_init, h_init])
+
+
+def _double_gather(row_idx: list[int], col_idx: list[int]) -> onnx.ModelProto:
+    """行→列の順で Gather（axis=2 → axis=3）を適用して出力を構成する。"""
+    r_init = helper.make_tensor("rows", TensorProto.INT64, [GRID_MAX], row_idx)
+    c_init = helper.make_tensor("cols", TensorProto.INT64, [GRID_MAX], col_idx)
+    g1 = helper.make_node("Gather", ["input", "rows"], ["t"], axis=2)
+    g2 = helper.make_node("Gather", ["t", "cols"], ["output"], axis=3)
+    return _model([g1, g2], [r_init, c_init])
+
+
+def _scale_idx(n: int, factor: int) -> list[int]:
+    """output 位置 i → source 位置 i//factor（nearest-neighbour 拡大）。"""
+    end = min(n * factor, GRID_MAX)
+    out = [i // factor for i in range(end)]
+    return out + [GRID_MAX - 1] * (GRID_MAX - len(out))
+
+
+def _tile_idx(n: int, reps: int) -> list[int]:
+    """output 位置 i → source 位置 i%n（繰り返しタイル）。"""
+    seq = (list(range(n)) * reps)[:GRID_MAX]
+    return seq + [GRID_MAX - 1] * (GRID_MAX - len(seq))
+
+
+def _mirror_tile_idx(n: int, reps: int) -> list[int]:
+    """output 位置 i → source 位置（偶数コピーは順、奇数コピーは逆順）。"""
+    seq: list[int] = []
+    for r in range(reps):
+        block = list(range(n)) if r % 2 == 0 else list(range(n - 1, -1, -1))
+        seq.extend(block)
+    seq = seq[:GRID_MAX]
+    return seq + [GRID_MAX - 1] * (GRID_MAX - len(seq))
+
+
+def build_scale(h: int, w: int, sh: int, sw: int) -> onnx.ModelProto:
+    """ブロック複製拡大: 各セルが sh×sw のブロックになる。params=60。"""
+    return _double_gather(_scale_idx(h, sh), _scale_idx(w, sw))
+
+
+def build_tile(h: int, w: int, rh: int, rw: int) -> onnx.ModelProto:
+    """h×w グリッドを rh×rw 回タイル。params=60。"""
+    return _double_gather(_tile_idx(h, rh), _tile_idx(w, rw))
+
+
+def build_mosaic(h: int, w: int, rh: int, rw: int) -> onnx.ModelProto:
+    """mirror-tile: 隣接コピーが反転して辺を共有する。params=60。"""
+    return _double_gather(_mirror_tile_idx(h, rh), _mirror_tile_idx(w, rw))
+
+
+def build_keep_color(color: int) -> onnx.ModelProto:
+    """color 以外の色を背景 0 にマップする 1x1 Conv。params=100。
+
+    W[0, k] = 1 for k != color（非対象色はすべて ch0=背景に集約）。
+    W[color, color] = 1（対象色はそのまま通過）。
+    OOB（all-zero）セルは全出力チャネルが 0 のまま保たれる。
+    """
+    w = np.zeros((NUM_COLORS, NUM_COLORS, 1, 1), dtype=np.float32)
+    for k in range(NUM_COLORS):
+        if k != color:
+            w[0, k, 0, 0] = 1.0
+    w[color, color, 0, 0] = 1.0
+    init = helper.make_tensor("W", _DTYPE, [NUM_COLORS, NUM_COLORS, 1, 1], w.flatten())
+    node = helper.make_node(
+        "Conv", ["input", "W"], ["output"], kernel_shape=[1, 1], pads=[0, 0, 0, 0]
+    )
+    return _model([node], [init])

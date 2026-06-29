@@ -239,3 +239,117 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── anti_transpose ────────────────────────────────────────────────────────
+
+
+def test_solve_anti_transpose_3x3() -> None:
+    g = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    at = [[9, 6, 3], [8, 5, 2], [7, 4, 1]]
+    model = solvers.solve_anti_transpose(_task(g, at))
+    assert model is not None
+    res = _run_audit(model, _examples(g, at))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_anti_transpose_not_applicable_returns_none() -> None:
+    g = [[1, 2], [3, 4]]
+    wrong = [[2, 1], [4, 3]]  # flip_h, not anti_transpose
+    assert solvers.solve_anti_transpose(_task(g, wrong)) is None
+
+
+# ─── scale ─────────────────────────────────────────────────────────────────
+
+
+def test_solve_scale_2x2_by_2x2() -> None:
+    g = [[1, 2], [3, 4]]
+    scaled = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    model = solvers.solve_scale(_task(g, scaled))
+    assert model is not None
+    res = _run_audit(model, _examples(g, scaled))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_tile_not_matched() -> None:
+    """tile パターンは scale に一致しない。"""
+    g = [[1, 2], [3, 4]]
+    tiled = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    assert solvers.solve_scale(_task(g, tiled)) is None
+
+
+def test_solve_scale_same_size_returns_none() -> None:
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_scale(_task(g, g)) is None
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_by_2x2() -> None:
+    g = [[1, 2], [3, 4]]
+    tiled = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(g, tiled))
+    assert model is not None
+    res = _run_audit(model, _examples(g, tiled))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_scale_not_matched() -> None:
+    """scale パターンは tile に一致しない。"""
+    g = [[1, 2], [3, 4]]
+    scaled = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_tile(_task(g, scaled)) is None
+
+
+# ─── mosaic ────────────────────────────────────────────────────────────────
+
+
+def test_solve_mosaic_2x2_by_2x2() -> None:
+    g = [[1, 2], [3, 4]]
+    mosaicked = [[1, 2, 2, 1], [3, 4, 4, 3], [3, 4, 4, 3], [1, 2, 2, 1]]
+    model = solvers.solve_mosaic(_task(g, mosaicked))
+    assert model is not None
+    res = _run_audit(model, _examples(g, mosaicked))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_mosaic_not_applicable_returns_none() -> None:
+    g = [[1, 2], [3, 4]]
+    wrong = [[1, 2, 1, 2], [3, 4, 3, 4]]  # tile, not mosaic
+    assert solvers.solve_mosaic(_task(g, wrong)) is None
+
+
+# ─── keep_color ────────────────────────────────────────────────────────────
+
+
+def test_solve_keep_color_color2() -> None:
+    g = [[1, 2, 3], [2, 2, 2], [3, 1, 0]]
+    expected = [[0, 2, 0], [2, 2, 2], [0, 0, 0]]
+    model = solvers.solve_keep_color(_task(g, expected))
+    assert model is not None
+    res = _run_audit(model, _examples(g, expected))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_keep_color_background_is_zero() -> None:
+    """色 0 (背景) は keep_color では retain されない（bg は常に 0）。"""
+    g = [[0, 1], [2, 0]]
+    expected = [[0, 0], [2, 0]]
+    model = solvers.solve_keep_color(_task(g, expected))
+    assert model is not None
+    res = _run_audit(model, _examples(g, expected))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_keep_color_not_applicable_returns_none() -> None:
+    """recolor タスクは keep_color に一致しない。"""
+    g = [[1, 2], [3, 4]]
+    recolored = [[2, 3], [4, 5]]
+    assert solvers.solve_keep_color(_task(g, recolored)) is None
