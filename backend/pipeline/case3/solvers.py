@@ -164,6 +164,37 @@ def solve_recolor(task: Task) -> onnx.ModelProto | None:
     return B.build_recolor(mapping)
 
 
+# --- tile (repeat input grid kh×kw times) ------------------------------------
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """output が input の kh×kw タイリング（max(kh,kw) >= 2）。"""
+    exs = task.valid_examples()
+    if not exs:
+        return None
+    ref_ih, ref_iw = grid_shape(exs[0].input)
+    ref_oh, ref_ow = grid_shape(exs[0].output)
+    if ref_ih == 0 or ref_iw == 0:
+        return None
+    if ref_oh % ref_ih != 0 or ref_ow % ref_iw != 0:
+        return None
+    kh, kw = ref_oh // ref_ih, ref_ow // ref_iw
+    if max(kh, kw) < 2:
+        return None
+    if ref_oh > B.GRID_MAX or ref_ow > B.GRID_MAX:
+        return None
+    for e in exs:
+        ih, iw = grid_shape(e.input)
+        oh, ow = grid_shape(e.output)
+        if ih != ref_ih or iw != ref_iw or oh != ref_oh or ow != ref_ow:
+            return None
+        inp = _np(e.input)
+        out = _np(e.output)
+        for r in range(oh):
+            for c in range(ow):
+                if out[r, c] != inp[r % ih, c % iw]:
+                    return None
+    return B.build_tile(ref_ih, ref_iw, ref_oh, ref_ow)
+
+
 # --- constant output (output identical across all examples) ------------------
 def solve_constant(task: Task) -> onnx.ModelProto | None:
     outs = {tuple(map(tuple, e.output)) for e in task.valid_examples()}
@@ -234,6 +265,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
+    ("tile", solve_tile),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),

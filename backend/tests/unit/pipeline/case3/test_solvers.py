@@ -348,3 +348,65 @@ def test_solve_panels_in_solvers_list() -> None:
     """solve_panels が SOLVERS リストに含まれていることを確認。"""
     names = [name for name, _ in solvers.SOLVERS]
     assert "panels" in names
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_to_4x4() -> None:
+    """2×2 → 4×4 タイリング（縦横 2 倍）。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_1x3_to_3x3() -> None:
+    """1×3 → 3×3 タイリング（縦 3 倍）。"""
+    inp = [[1, 2, 3]]
+    out = [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_horizontal_only() -> None:
+    """1×2 → 1×4 タイリング（横 2 倍のみ）。"""
+    inp = [[1, 2]]
+    out = [[1, 2, 1, 2]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_identity_returns_none() -> None:
+    """k=1×1 はタイリングではない（identity が担当）。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_non_divisible_returns_none() -> None:
+    """output サイズが input サイズで割り切れなければ None。"""
+    inp = [[1, 2, 3]]
+    out = [[1, 2, 3, 1, 2]]  # 5 cols, 3 doesn't divide 5
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_wrong_pattern_returns_none() -> None:
+    """output が input のタイルパターンと一致しなければ None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 2, 1], [3, 4, 4, 3], [1, 2, 2, 1], [3, 4, 4, 3]]  # flip_h, not tile
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_in_solvers_list() -> None:
+    """solve_tile が SOLVERS リストに含まれていることを確認。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile" in names
