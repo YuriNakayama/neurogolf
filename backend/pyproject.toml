@@ -81,6 +81,7 @@ exclude = [
     "site-packages",
     "venv",
     ".claude",
+    "scratchpad",
 ]
 line-length = 88
 indent-width = 4
@@ -120,6 +121,7 @@ exclude = [
     ".claude",
     "poetry.lock",
     "__pycache__",
+    "scratchpad",
 ]
 python_version = "3.13"
 strict = true
