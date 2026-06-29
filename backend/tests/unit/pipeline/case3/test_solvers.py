@@ -239,3 +239,85 @@ def test_solve_floodfill_cost_below_threshold() -> None:
     res = _run_audit(model, _examples(inp, out))
     assert res["cost"] is not None
     assert res["cost"] < 10000
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_tiled_2x2() -> None:
+    """2×2 グリッドを 2×2 タイリング → 4×4。"""
+    inp = [[1, 2], [3, 4]]
+    out = [
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+    ]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_asymmetric_vertical_only() -> None:
+    """2×3 グリッドを縦 2 回のみタイリング → 4×3。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [1, 2, 3],
+        [4, 5, 6],
+    ]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_horizontal_only() -> None:
+    """3×2 グリッドを横 3 回タイリング → 3×6。"""
+    inp = [[1, 2], [3, 4], [5, 6]]
+    out = [[1, 2, 1, 2, 1, 2], [3, 4, 3, 4, 3, 4], [5, 6, 5, 6, 5, 6]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_not_tiling_returns_none() -> None:
+    """タイリングでない出力では None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 9, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_non_integer_ratio_returns_none() -> None:
+    """出力が入力の整数倍でなければ None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1], [3, 4, 3], [1, 2, 1]]
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_same_size_returns_none() -> None:
+    """入出力が同サイズ (rh=rw=1) なら None（identity に任せる）。"""
+    inp = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(inp, inp)) is None
+
+
+def test_solve_tile_cost_low() -> None:
+    """小グリッド tile の cost が低いことを確認 (< 5000)。"""
+    inp = [[1, 2], [3, 4]]
+    out = [
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+    ]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["cost"] is not None
+    assert res["cost"] < 5000
