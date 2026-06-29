@@ -218,6 +218,55 @@ def test_solve_floodfill_recolor_not_applicable() -> None:
     assert solvers.solve_floodfill(_task(inp, out)) is None
 
 
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_to_4x4() -> None:
+    """2×2 入力を 4×4 にタイルするタスクを解けること。"""
+    g = [[1, 2], [3, 4]]
+    tiled = [[g[r % 2][c % 2] for c in range(4)] for r in range(4)]
+    model = solvers.solve_tile(_task(g, tiled))
+    assert model is not None
+    res = _run_audit(model, _examples(g, tiled))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_non_multiple() -> None:
+    """非整数倍タイル (3×3 → 7×7) が解けること。"""
+    g = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    tiled = [[g[r % 3][c % 3] for c in range(7)] for r in range(7)]
+    model = solvers.solve_tile(_task(g, tiled))
+    assert model is not None
+    res = _run_audit(model, _examples(g, tiled))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_returns_none_for_identity() -> None:
+    """同一サイズ（タイルなし）は None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_returns_none_for_non_tile() -> None:
+    """タイルパターンでない出力には None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    wrong = [[1, 3, 1, 3], [2, 4, 2, 4]]  # transpose-tile ではあるが通常 tile ではない
+    assert solvers.solve_tile(_task(inp, wrong)) is None
+
+
+def test_solve_tile_cost_reasonable() -> None:
+    """tile ソルバーの cost が適切な範囲内であること。"""
+    g = [[1, 2], [3, 4]]
+    tiled = [[g[r % 2][c % 2] for c in range(4)] for r in range(4)]
+    model = solvers.solve_tile(_task(g, tiled))
+    assert model is not None
+    res = _run_audit(model, _examples(g, tiled))
+    assert res["cost"] is not None
+    assert res["cost"] < 10000
+
+
 def test_solve_floodfill_cost_below_threshold() -> None:
     """生成コスト < 10000 であること (基本的な小グリッドの上限チェック)。"""
     inp = [

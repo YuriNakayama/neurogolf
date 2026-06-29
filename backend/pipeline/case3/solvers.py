@@ -130,6 +130,27 @@ def solve_rot270(task: Task) -> onnx.ModelProto | None:
     return None
 
 
+# --- tile (repeat input pattern) --------------------------------------------
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """入力グリッドをタイル状に繰り返して出力するタスクを解く。"""
+    dims = {
+        (len(e.input), len(e.input[0]), len(e.output), len(e.output[0]))
+        for e in task.valid_examples()
+    }
+    if len(dims) != 1:
+        return None
+    ih, iw, oh, ow = next(iter(dims))
+    if oh < ih or ow < iw or (oh == ih and ow == iw):
+        return None
+    rH = (oh + ih - 1) // ih
+    rW = (ow + iw - 1) // iw
+    for e in task.valid_examples():
+        tiled = np.tile(_np(e.input), (rH, rW))[:oh, :ow]
+        if not np.array_equal(tiled, _np(e.output)):
+            return None
+    return B.build_tile(ih, iw, oh, ow)
+
+
 # --- recolor (global color map) ---------------------------------------------
 def _recolor_mapping(task: Task) -> dict[int, int] | None:
     if not _all(task, _same_shape):
@@ -226,6 +247,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("transpose", solve_transpose),
     ("flip_v", solve_flip_v),
     ("flip_h", solve_flip_h),
+    ("tile", solve_tile),
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),

@@ -144,7 +144,52 @@ def test_rot270_3x3() -> None:
         B.build_rot180(3, 3),
         B.build_rot90(3),
         B.build_rot270(3),
+        B.build_tile(2, 2, 4, 4),
+        B.build_tile(3, 3, 7, 7),
+        B.build_tile(1, 3, 1, 6),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
     onnx.checker.check_model(model, full_check=True)
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_tile_2x2_to_4x4() -> None:
+    """2×2 → 4×4 exact tile（縦横両方を 2 回繰り返す）。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    out = _run(B.build_tile(2, 2, 4, 4), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_1x3_to_1x6() -> None:
+    """1×3 → 1×6 横方向のみのタイリング。"""
+    g = [[1, 2, 3]]
+    expected = [[1, 2, 3, 1, 2, 3]]
+    out = _run(B.build_tile(1, 3, 1, 6), g)
+    assert _argmax_grid(out, 1, 6) == expected
+
+
+def test_tile_3x1_to_6x1() -> None:
+    """3×1 → 6×1 縦方向のみのタイリング。"""
+    g = [[1], [2], [3]]
+    expected = [[1], [2], [3], [1], [2], [3]]
+    out = _run(B.build_tile(3, 1, 6, 1), g)
+    assert _argmax_grid(out, 6, 1) == expected
+
+
+def test_tile_non_multiple_3x3_to_7x7() -> None:
+    """非整数倍タイル: 3×3 → 7×7 (ceil(7/3)=3, tiled=9×9 を 7×7 に切り出す)。"""
+    g = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    expected = [[g[r % 3][c % 3] for c in range(7)] for r in range(7)]
+    out = _run(B.build_tile(3, 3, 7, 7), g)
+    assert _argmax_grid(out, 7, 7) == expected
+
+
+def test_tile_padding_stays_zero() -> None:
+    """アクティブ領域外（row >= oh）はゼロのままであること。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 4, 4), g)
+    assert np.all(out[0, :, 4:, :] == 0)
