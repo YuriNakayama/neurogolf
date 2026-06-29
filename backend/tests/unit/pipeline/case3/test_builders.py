@@ -132,6 +132,60 @@ def test_rot270_3x3() -> None:
     assert _argmax_grid(out, 3, 3) == expected
 
 
+# ─── scale (ブロック拡大) ───────────────────────────────────────────────────
+
+
+def test_scale_2x2_by_2() -> None:
+    """2×2 を 4×4 にブロック拡大 (sh=sw=2)。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    out = _run(B.build_scale(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_scale_2x3_by_h2_w1() -> None:
+    """2×3 を 4×3 に縦のみ拡大 (sh=2, sw=1)。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = [[1, 2, 3], [1, 2, 3], [4, 5, 6], [4, 5, 6]]
+    out = _run(B.build_scale(2, 3, 2, 1), g)
+    assert _argmax_grid(out, 4, 3) == expected
+
+
+def test_scale_padding_stays_zero() -> None:
+    """拡大後領域外は 0 のまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
+# ─── tile (タイル繰り返し) ──────────────────────────────────────────────────
+
+
+def test_tile_2x2_by_2() -> None:
+    """2×2 グリッドを 4×4 にタイル (rh=rw=2)。"""
+    g = [[1, 2], [3, 4]]
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_1x3_by_3x1() -> None:
+    """1×3 グリッドを 3×3 にタイル (rh=3, rw=1)。"""
+    g = [[1, 2, 3]]
+    expected = [[1, 2, 3], [1, 2, 3], [1, 2, 3]]
+    out = _run(B.build_tile(1, 3, 3, 1), g)
+    assert _argmax_grid(out, 3, 3) == expected
+
+
+def test_tile_padding_stays_zero() -> None:
+    """タイル後領域外は 0 のまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
 # ─── onnx.checker pass ─────────────────────────────────────────────────────
 
 
@@ -144,6 +198,8 @@ def test_rot270_3x3() -> None:
         B.build_rot180(3, 3),
         B.build_rot90(3),
         B.build_rot270(3),
+        B.build_scale(2, 2, 2, 2),
+        B.build_tile(2, 2, 2, 2),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
