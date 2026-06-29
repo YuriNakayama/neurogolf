@@ -116,6 +116,69 @@ def build_rot90(h: int) -> onnx.ModelProto:
     return _model([t, g], [init])
 
 
+def build_tile(ih: int, iw: int, oh: int, ow: int) -> onnx.ModelProto:
+    """入力 [ih, iw] をタイル状に繰り返して [oh, ow] → [1,10,30,30] を生成。
+
+    [1] Slice [1,10,30,30] → [1,10,ih,iw]（アクティブ領域の抽出）
+    [2] Tile [1,10,ih,iw] → [1,10,ceil(oh/ih)*ih, ceil(ow/iw)*iw]
+    [3] Slice（オーバーシュート時のみ）→ [1,10,oh,ow]
+    [4] Pad（oh<30 or ow<30 の場合）→ [1,10,30,30]
+    """
+    rH = (oh + ih - 1) // ih
+    rW = (ow + iw - 1) // iw
+    tiled_h = rH * ih
+    tiled_w = rW * iw
+    need_slice2 = tiled_h > oh or tiled_w > ow
+    need_pad = oh < GRID_MAX or ow < GRID_MAX
+
+    nodes: list[onnx.NodeProto] = []
+    inits: list[onnx.TensorProto] = [
+        helper.make_tensor("tl_s1", TensorProto.INT64, [2], [0, 0]),
+        helper.make_tensor("tl_e1", TensorProto.INT64, [2], [ih, iw]),
+        helper.make_tensor("tl_ax", TensorProto.INT64, [2], [2, 3]),
+    ]
+    nodes.append(
+        helper.make_node("Slice", ["input", "tl_s1", "tl_e1", "tl_ax"], ["tl_crop"])
+    )
+
+    inits.append(helper.make_tensor("tl_reps", TensorProto.INT64, [4], [1, 1, rH, rW]))
+    tile_out = "tl_tiled" if (need_slice2 or need_pad) else "output"
+    nodes.append(helper.make_node("Tile", ["tl_crop", "tl_reps"], [tile_out]))
+
+    if need_slice2:
+        slice2_out = "tl_trim" if need_pad else "output"
+        inits += [
+            helper.make_tensor("tl_s2", TensorProto.INT64, [2], [0, 0]),
+            helper.make_tensor("tl_e2", TensorProto.INT64, [2], [oh, ow]),
+            helper.make_tensor("tl_ax2", TensorProto.INT64, [2], [2, 3]),
+        ]
+        nodes.append(
+            helper.make_node(
+                "Slice", [tile_out, "tl_s2", "tl_e2", "tl_ax2"], [slice2_out]
+            )
+        )
+        pad_src = slice2_out
+    else:
+        pad_src = tile_out
+
+    if need_pad:
+        nodes.append(
+            helper.make_node(
+                "Pad",
+                [pad_src],
+                ["output"],
+                mode="constant",
+                pads=[0, 0, 0, 0, 0, 0, GRID_MAX - oh, GRID_MAX - ow],
+                value=0.0,
+            )
+        )
+
+    x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
+    y = helper.make_tensor_value_info("output", _DTYPE, GRID_SHAPE)
+    graph = helper.make_graph(nodes, "tile", [x], [y], inits)
+    return helper.make_model(graph, ir_version=IR_VERSION, opset_imports=OPSET)
+
+
 def build_rot270(w: int) -> onnx.ModelProto:
     """rot270 CCW: Transpose(0,1,3,2) → Gather 新 height 軸を逆順（= 旧 width w）。"""
     idx = _rev_idx(w)
