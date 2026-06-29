@@ -45,9 +45,25 @@ harvest 早計枯渇判断を是正し、franksunp/kokinnwakashuu の追加 vari
 - 結論: harishk(7178.23) バンドルは franksunp/kokinnwakashuu 全 variant の consolidated frontier。
   私の 15-task cherry-pick が既にその最良を捕捉済み。**計 12 バンドル検証で 7180.46 が公開包絡線**と確定。
 
+## cycle8c 追記: dtype 削減レバーを実測で棄却（hard evidence）
+
+「高コストタスクのメモリは float32 のブール浪費が支配 → uint8 化で 4× 削減可」仮説を、
+faithful scorer のメモリ計測を per-tensor 分解して実測検証:
+
+| task | total_mem | f32 比率 | 支配テンソル |
+|---|---|---|---|
+| t286 | 55272 | **0%** | u8/bool [1,10,30,30]（既に最小 dtype）|
+| t018 | 51342 | **8%**(4240B のみ) | bool 9000 + 小 f32 3600 |
+
+- **仮説棄却**: bundle 作者は dtype 削減を完了済み。支配的中間は既に u8/bool。
+- t286 の 9000B u8 [1,10,30,30] = 「全グリッド 1byte/cell」はグリッド中間の理論下限。これ以上は
+  **全グリッド中間を materialize しない別アルゴリズム**（expert 再設計）でしか減らない。
+- 従来「中間は大半 uint8」は assumption だったが、本サイクルで初めて **hard evidence で確認**。
+
 ## 次の一手
 
 - 新規高 LB バンドルの公開を監視し、出現次第 cherry-pick→faithful→submit を自動実行。
 - 検証済みレバー一覧（全て枯渇/不可）: 公開 harvest（12 バンドル）/ per-task golf / ORT 最適化 /
+  **dtype 削減（実測で u8/bool 済み確認）** /
   surgery / fp16 / 幾何・局所・対称・lookup ソルバ（過去 7 系統）。退行ゼロで前進できる
   利用可能レバーは現存しない。無改善 submit はしない（提出枠の無駄・退行リスク回避）。
