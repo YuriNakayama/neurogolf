@@ -39,3 +39,19 @@
   → 提出**、という generalization-gated redesign を 1 タスク試す。一致しなければ floor 維持。
 - 提出前のランダム入力一致ゲートを今後の必須手順とする。
 </content>
+
+## cycle 2 追記: 安全レバー(surgery)再確認 + 高コスト非局所タスクの確認
+
+cycle 1 の教訓（hidden 安全に転送するのは ①意味保存 surgery ②真アルゴリズム再構築のみ）を
+受け、安全レバーを再点検:
+
+- **graph surgery 全パス（faithful, top-cost 標的）**: t233/t018 とも no reduction。過去
+  E27/E34 で combined_best（=現 floor）に全 surgery wins 取込み済み → **飽和確定**（0 win）。
+- **観測 observer 推奨タスクの精査**: t133(33573)=template-based stamping（key 形状検出→object
+  展開、非局所, k-局所スキャンで mink=None）、t118=cross-arm gap fill（Einsum×3, 非局所）。
+  いずれも floor が near-optimal 実装済みで安価な真アルゴリズムが存在しない → cheap win 無し。
+
+**cycle 2 結論**: 安全レバー（surgery）は飽和、高コストタスクは非局所で floor が最小付近。
+隔離コンテナ（並行 dsl session 無し）では harvest 不可。**floor 7172.43 が本コンテナで自動
+反復が到達できる構造的上限**であることを cycle 1-2 で独立に再確認（8 セッション + 本セッション）。
+残る唯一の道は generalization-gate を課した per-task 真アルゴリズム手 golf（expert-scale, 低確率）。
