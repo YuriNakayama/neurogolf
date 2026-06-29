@@ -38,7 +38,6 @@
   （3×3 多数決等）を厳密に numpy 特定 → 最小 ONNX 化 → ランダム入力で floor net と一致確認
   → 提出**、という generalization-gated redesign を 1 タスク試す。一致しなければ floor 維持。
 - 提出前のランダム入力一致ゲートを今後の必須手順とする。
-</content>
 
 ## cycle 2 追記: 安全レバー(surgery)再確認 + 高コスト非局所タスクの確認
 
