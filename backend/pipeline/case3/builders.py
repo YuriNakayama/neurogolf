@@ -123,3 +123,16 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def build_tile_1d(orig_size: int, reps: int, axis: int) -> onnx.ModelProto:
+    """1D タイリング: orig_size 次元を reps 回繰り返す Gather 1 ノード（cost=30）。
+
+    axis=2 で縦タイリング（tile_v）、axis=3 で横タイリング（tile_h）。
+    padding 領域（出力 >= orig_size*reps）はゼロのまま（元の zero-hot 行を参照）。
+    """
+    tiled = list(range(orig_size)) * reps
+    tiled += list(range(len(tiled), GRID_MAX))
+    init = helper.make_tensor("idx", TensorProto.INT64, [GRID_MAX], tiled)
+    node = helper.make_node("Gather", ["input", "idx"], ["output"], axis=axis)
+    return _model([node], [init])

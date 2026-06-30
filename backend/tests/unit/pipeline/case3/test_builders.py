@@ -148,3 +148,34 @@ def test_rot270_3x3() -> None:
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
     onnx.checker.check_model(model, full_check=True)
+
+
+# ─── build_tile_1d ─────────────────────────────────────────────────────────
+
+
+def test_tile_v_2x3_grid() -> None:
+    """2×3 グリッドを縦に 2 回タイリング → 4×3。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = [[1, 2, 3], [4, 5, 6], [1, 2, 3], [4, 5, 6]]
+    out = _run(B.build_tile_1d(2, 2, axis=2), g)
+    assert _argmax_grid(out, 4, 3) == expected
+
+
+def test_tile_h_2x3_grid() -> None:
+    """2×3 グリッドを横に 2 回タイリング → 2×6。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = [[1, 2, 3, 1, 2, 3], [4, 5, 6, 4, 5, 6]]
+    out = _run(B.build_tile_1d(3, 2, axis=3), g)
+    assert _argmax_grid(out, 2, 6) == expected
+
+
+def test_tile_v_padding_stays_zero() -> None:
+    """タイル後の padding 行（row >= H_out）はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_1d(2, 3, axis=2), g)
+    assert np.all(out[0, :, 6:, :] == 0)
+
+
+def test_tile_1d_onnx_checker_passes() -> None:
+    onnx.checker.check_model(B.build_tile_1d(3, 2, axis=2), full_check=True)
+    onnx.checker.check_model(B.build_tile_1d(3, 2, axis=3), full_check=True)
