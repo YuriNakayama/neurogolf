@@ -781,6 +781,97 @@ def fp16_surgery(model: onnx.ModelProto) -> onnx.ModelProto:
     return m
 
 
+# --- dead code elimination ----------------------------------------------------
+
+
+def _dead_code_elimination(graph: onnx.GraphProto) -> None:
+    """グラフ出力に寄与しないノードを反復除去する。"""
+    out_names = {o.name for o in graph.output}
+    changed = True
+    while changed:
+        changed = False
+        consumed: set[str] = set(out_names)
+        consumed.update(x.name for x in graph.input)
+        for node in graph.node:
+            consumed.update(x for x in node.input if x)
+        kept = [n for n in graph.node if any(o for o in n.output if o in consumed)]
+        if len(kept) < len(graph.node):
+            del graph.node[:]
+            graph.node.extend(kept)
+            changed = True
+    _prune_unused_initializers(graph)
+
+
+# --- And guard pruning --------------------------------------------------------
+
+
+def prune_and_guard(
+    model: onnx.ModelProto, *, guard_name: str
+) -> onnx.ModelProto:
+    """And(guard_name, X) → Y を X に直結し、guard_name の計算を DCE で除去する。
+
+    guard_name が And の入力に現れない場合は model をそのまま返す。
+    呼び出し側は audit_one で n_fail=0 かつ cost 減を確認してから採用すること。
+    """
+    g = model.graph
+    out_names = {o.name for o in g.output}
+    rewire: dict[str, str] = {}
+    remove_idxs: set[int] = set()
+
+    for i, node in enumerate(g.node):
+        if (
+            node.op_type != "And"
+            or len(node.input) != 2
+            or len(node.output) != 1
+            or node.output[0] in out_names
+        ):
+            continue
+        inp = list(node.input)
+        if inp[0] == guard_name:
+            rewire[node.output[0]] = inp[1]
+            remove_idxs.add(i)
+        elif inp[1] == guard_name:
+            rewire[node.output[0]] = inp[0]
+            remove_idxs.add(i)
+
+    if not rewire:
+        return model
+
+    m = copy.deepcopy(model)
+    gm = m.graph
+
+    def _resolve(name: str) -> str:
+        seen: set[str] = set()
+        while name in rewire and name not in seen:
+            seen.add(name)
+            name = rewire[name]
+        return name
+
+    kept: list[onnx.NodeProto] = []
+    for i, node in enumerate(gm.node):
+        if i in remove_idxs:
+            continue
+        for j in range(len(node.input)):
+            node.input[j] = _resolve(node.input[j])
+        kept.append(node)
+
+    del gm.node[:]
+    gm.node.extend(kept)
+    _dead_code_elimination(gm)
+    del gm.value_info[:]
+    return m
+
+
+def prune_ingrid_guard(model: onnx.ModelProto) -> onnx.ModelProto:
+    """ingrid_b ガード除去（task206）: notbg_b[r,c]→True ⇒ ingrid_b[r,c]→True が成立。
+
+    rig/cig はグリッド内セルの存在を row/col 投影で検査する。
+    notbg_b が True のセルは必ず非ゼロのチャネルを持ち、そのセルの row/col 両方が
+    active になるため ingrid_b は常に True。よって And(ingrid_b, nbf) == nbf。
+    """
+    return prune_and_guard(model, guard_name="ingrid_b")
+
+
 # --- driver -------------------------------------------------------------------
 
 Pass = Callable[[onnx.ModelProto], onnx.ModelProto]
@@ -791,6 +882,7 @@ PASSES: list[tuple[str, Pass]] = [
     ("index_surgery", index_surgery),
     ("broadcast_compress", broadcast_compress),
     ("conv1x1_to_gather", conv1x1_to_gather),
+    ("prune_ingrid_guard", prune_ingrid_guard),
     ("fp16_surgery", fp16_surgery),
 ]
 
