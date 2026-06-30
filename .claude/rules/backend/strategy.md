@@ -1,0 +1,52 @@
+# 改善戦略ルール（最優先・常時遵守）
+
+`backend/**` を編集・実行する全作業に適用。得点向上の**手段**を規定する。本ルールは
+CLAUDE.md の goal と同格で、両者の手段指定（独自実装・1タスクずつ手動）を満たすこと。
+
+## 第一義務：独自実装
+
+- 得点向上は**独自実装を主軸**とする。harvest（他者公開ノートブックの取込）は
+  per-task 最小値が上限であり、上位入賞には原理的に不十分。**harvest は補助手段に過ぎない**。
+- **harvest 単独サイクルの禁止**：harvest（`kaggle kernels output` による cross-bundle
+  cherry-pick）だけで構成されるサイクルを「前進」と記録してはならない。
+  各サイクルは**独自実装の試行を1件以上含む**こと。
+- 「LB が上がった」という結果は、手段指定（独自実装・1タスクずつ手動）の遵守と
+  **すり替えてはならない**。goal は結果と手段の両方を要求する。
+
+## サイクル構造（固定・毎サイクル）
+
+1. **floor 全監査**：全400タスクを faithful 監査（`audit_one` run_correctness=True）し、
+   未解答（n_fail>0 / unscorable / 0点）・高コスト上位を特定。「狙い目リスト」を更新。
+2. **対象1タスクに独自 net を構築**（下記3手法のいずれか）。
+3. **faithful 検証**：train/test/arc-gen 全例で n_fail=0、かつ cost<floor。
+4. **submit → 実 LB 上昇で accept、退行は revert**。
+
+## 独自実装の3手法
+
+| 手法 | 内容 |
+|---|---|
+| 学習 fit | 小 CNN を勾配学習で fit → 蒸留・量子化・枝刈りで最小化 |
+| プログラム合成 | ARC primitive（回転/反射/連結成分/色写像/tiling 等）の組合せ探索で厳密規則を発見 → 許可 op で ONNX 化 |
+| 手構築 | 規則を numpy で特定 → 最小 Conv/Gather 等で表現 |
+
+## 「不可能」判定の基準（厳格化）
+
+- あるタスクの独自実装を諦めるには、**3手法すべてで faithful 失敗を記録**すること。
+- 「既存 net を置換できない」という個別事実を「独自実装は不可能」と**一般化してはならない**
+  （case30 の誤った一般化が harvest 偏重の温床になった反省）。
+- 不可能の証明は**義務の免除にならない**。証明をサボる口実に使わない。
+
+## result doc の必須欄
+
+各 `docs/experiment/YYYYMMDD_caseN_result.md` に以下を必須記載。空欄なら commit してはならない:
+
+- `independent_impl:` — そのサイクルで試した独自実装（対象タスク・手法・faithful 結果）。
+  harvest のみで independent_impl が空のサイクルは**違反**。
+- `harvest:` — 補助として行った harvest があれば記載（任意）。
+
+## 禁止
+
+- **cost-only 採用**：必ず全例 n_fail=0 を確認。異常に安い候補（degenerate net、
+  例: bor_v51 t233 cost=900/nf=266）を cost だけで採用しない。
+- **禁止 op**：`Loop` / `Scan` / `NonZero` / `Unique` / `Script` / `Function` / `Compress`。
+- 静的形状必須。各 `taskNNN.onnx` ≤ 1.44 MB。

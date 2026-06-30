@@ -57,12 +57,17 @@ Submissions can be made up to 100 times a day without verification.
 
 Per-task score is `max(1, 25 - ln(cost))` and is only earned when the network is **functionally correct** — every cell of every example pair (train / test / arc-gen, plus a private benchmark) matches the expected output exactly. Total score is the sum across solved tasks. The competition rewards solving exactly while minimizing `cost` ("golf").
 
+> ⚠️ **得点向上は独自実装を主軸とする。** harvest（公開ノートブックの取込）は per-task 最小値が
+> 上限であり、上位入賞には独自ネットが必須。harvest は補助手段に過ぎず、**harvest 単独サイクルは
+> 禁止**（各サイクルは独自実装の試行を1件以上含む）。詳細は `.claude/rules/backend/strategy.md`。
+
 ## Rules
 
 | Rule file | Auto-loaded for | When to read manually |
 |-----------|----------------|----------------------|
 | `.claude/rules/python.md` | `**/*.py` | Python conventions (type hints, naming, error handling, lint). Note: the "Agent Performance Conventions" section is inherited PTCG content pending rework — see `docs/develop/MIGRATION.md` |
 | `.claude/rules/data.md` | `data/**` | data/ 4-layer structure (lake/processed/mart/output). Note: selfplay/kaggle_episodes layer descriptions are inherited PTCG content pending rework |
+| `.claude/rules/backend/strategy.md` | `backend/**` | **改善戦略（最優先）**: 独自実装を第一義務とし harvest 単独サイクルを禁止。サイクル構造（floor全監査→独自net→faithful検証→submit）、独自実装3手法、「不可能」判定の厳格基準、result doc の `independent_impl:` 必須欄 |
 | `.claude/rules/backend/submit.md` | `backend/src/submit/**`, `dev/submit` | Kaggle submit conventions: zip must be named `submission.zip`, use the kaggle CLI path (not the SDK), LB-gated adoption, `dev/submit` usage |
 | `.claude/rules/backend/pipeline.md` | `backend/pipeline/**` | `pipeline/case<N>/` layout, case independence, relation to the official scorer |
 | `.claude/rules/backend/tests.md` | `backend/tests/**` | Pytest conventions, unit/integration/e2e classification |
