@@ -225,6 +225,46 @@ def solve_panels(task: Task) -> onnx.ModelProto | None:
     return build_panels(task.valid_examples())
 
 
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """output = np.tile(input, (n_rows, n_cols)) のタスクを解く。
+
+    全 example で入力・出力サイズが一定で、出力が入力の整数倍タイルであること。
+    """
+    examples = task.valid_examples()
+    if not examples:
+        return None
+
+    first = examples[0]
+    h_in = len(first.input)
+    w_in = len(first.input[0]) if first.input else 0
+    h_out = len(first.output)
+    w_out = len(first.output[0]) if first.output else 0
+
+    if w_in == 0 or w_out == 0:
+        return None
+    if h_out % h_in != 0 or w_out % w_in != 0:
+        return None
+
+    n_rows = h_out // h_in
+    n_cols = w_out // w_in
+
+    if n_rows == 1 and n_cols == 1:
+        return None  # identity が担当
+    if n_rows * h_in > B.GRID_MAX or n_cols * w_in > B.GRID_MAX:
+        return None
+
+    for e in examples:
+        if len(e.input) != h_in or len(e.input[0]) != w_in:
+            return None
+        if len(e.output) != h_out or len(e.output[0]) != w_out:
+            return None
+        expected = np.tile(_np(e.input), (n_rows, n_cols))
+        if _np(e.output).tolist() != expected.tolist():
+            return None
+
+    return B.build_tile(h_in, w_in, n_rows, n_cols)
+
+
 # 適用順: cost が小さいものを先に（同点なら先勝ち）。検証側が cost 最小を選ぶので順序は目安。
 SOLVERS: list[tuple[str, Solver]] = [
     ("identity", solve_identity),
@@ -236,6 +276,7 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("rot270", solve_rot270),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
+    ("tile", solve_tile),
     ("constant", solve_constant),
     ("panels", solve_panels),
     ("residual3", solve_residual3),
