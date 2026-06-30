@@ -123,3 +123,40 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def build_tile(h: int, w: int, n_rows: int, n_cols: int) -> onnx.ModelProto:
+    """タイリング: active region [1,10,h,w] を (n_rows, n_cols) 回繰り返す。
+
+    Slice → Tile → Pad（必要時のみ）の構成。
+    params: 4 initializer × 4 要素 = 16 INT64。
+    memory: 中間テンソル sliced[1,10,h,w] + tiled[1,10,n*h,m*w]。
+    """
+    pad_h = GRID_MAX - n_rows * h
+    pad_w = GRID_MAX - n_cols * w
+    need_pad = pad_h > 0 or pad_w > 0
+    tile_out = "tiled" if need_pad else "output"
+
+    starts_t = helper.make_tensor("starts", TensorProto.INT64, [4], [0, 0, 0, 0])
+    ends_t = helper.make_tensor("ends", TensorProto.INT64, [4], [1, NUM_COLORS, h, w])
+    axes_t = helper.make_tensor("axes", TensorProto.INT64, [4], [0, 1, 2, 3])
+    repeats_t = helper.make_tensor(
+        "repeats", TensorProto.INT64, [4], [1, 1, n_rows, n_cols]
+    )
+
+    nodes: list[onnx.NodeProto] = [
+        helper.make_node("Slice", ["input", "starts", "ends", "axes"], ["sliced"]),
+        helper.make_node("Tile", ["sliced", "repeats"], [tile_out]),
+    ]
+    if need_pad:
+        nodes.append(
+            helper.make_node(
+                "Pad",
+                ["tiled"],
+                ["output"],
+                pads=[0, 0, 0, 0, 0, 0, pad_h, pad_w],
+                mode="constant",
+                value=0.0,
+            )
+        )
+    return _model(nodes, [starts_t, ends_t, axes_t, repeats_t])

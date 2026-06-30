@@ -348,3 +348,47 @@ def test_solve_panels_in_solvers_list() -> None:
     """solve_panels が SOLVERS リストに含まれていることを確認。"""
     names = [name for name, _ in solvers.SOLVERS]
     assert "panels" in names
+
+
+# ─── tile ──────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2x2_repeat_2x2() -> None:
+    """2×2 グリッドを 2×2 にタイル → 4×4 出力。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_asymmetric_repeat() -> None:
+    """非対称タイル (3×1): 2×3 グリッドを縦に 3 回繰り返す。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out = [[1, 2, 3], [4, 5, 6]] * 3
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_identity_is_not_tile() -> None:
+    """n_rows=n_cols=1 (恒等) は tile ソルバーが None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_not_applicable_returns_none() -> None:
+    """タイルパターンでないタスクは None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 3], [4, 5, 6]]  # 幅が整数倍でない
+    assert solvers.solve_tile(_task(inp, out)) is None
+
+
+def test_solve_tile_in_solvers_list() -> None:
+    """solve_tile が SOLVERS リストに含まれていることを確認。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile" in names
