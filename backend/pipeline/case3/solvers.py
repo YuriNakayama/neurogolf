@@ -42,6 +42,12 @@ def _const_dim(task: Task, *, axis: int) -> int | None:
     return next(iter(dims)) if len(dims) == 1 else None
 
 
+def _const_out_dim(task: Task, *, axis: int) -> int | None:
+    """全 example で出力グリッドの ``axis`` 次元が一定なら返す。"""
+    dims = {grid_shape(e.output)[axis] for e in task.valid_examples()}
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
 # --- geometric / trivial -----------------------------------------------------
 def solve_identity(task: Task) -> onnx.ModelProto | None:
     if _all(task, lambda e: e.input == e.output):
@@ -129,6 +135,45 @@ def solve_rot270(task: Task) -> onnx.ModelProto | None:
     ):
         return B.build_rot270(w)
     return None
+
+
+# --- 1D tiling ---------------------------------------------------------------
+def solve_tile_v(task: Task) -> onnx.ModelProto | None:
+    """tile vertically: H_out = reps * H_in (reps ≥ 2), W_out = W_in。"""
+    h_in = _const_dim(task, axis=0)
+    h_out = _const_out_dim(task, axis=0)
+    if h_in is None or h_out is None or h_out <= h_in or h_out % h_in != 0:
+        return None
+    w_in = _const_dim(task, axis=1)
+    w_out = _const_out_dim(task, axis=1)
+    if w_in is None or w_out is None or w_in != w_out:
+        return None
+    reps = h_out // h_in
+    if not _all(
+        task,
+        lambda e: _np(e.output).tolist() == np.tile(_np(e.input), (reps, 1)).tolist(),
+    ):
+        return None
+    return B.build_tile_1d(h_in, reps, axis=2)
+
+
+def solve_tile_h(task: Task) -> onnx.ModelProto | None:
+    """tile horizontally: W_out = reps * W_in (reps ≥ 2), H_out = H_in。"""
+    w_in = _const_dim(task, axis=1)
+    w_out = _const_out_dim(task, axis=1)
+    if w_in is None or w_out is None or w_out <= w_in or w_out % w_in != 0:
+        return None
+    h_in = _const_dim(task, axis=0)
+    h_out = _const_out_dim(task, axis=0)
+    if h_in is None or h_out is None or h_in != h_out:
+        return None
+    reps = w_out // w_in
+    if not _all(
+        task,
+        lambda e: _np(e.output).tolist() == np.tile(_np(e.input), (1, reps)).tolist(),
+    ):
+        return None
+    return B.build_tile_1d(w_in, reps, axis=3)
 
 
 # --- recolor (global color map) ---------------------------------------------
@@ -234,6 +279,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
+    ("tile_v", solve_tile_v),
+    ("tile_h", solve_tile_h),
     ("recolor_gather", solve_recolor_gather),
     ("recolor", solve_recolor),
     ("constant", solve_constant),

@@ -348,3 +348,59 @@ def test_solve_panels_in_solvers_list() -> None:
     """solve_panels が SOLVERS リストに含まれていることを確認。"""
     names = [name for name, _ in solvers.SOLVERS]
     assert "panels" in names
+
+
+# ─── tile_v ────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_v_2x() -> None:
+    """2×3 入力を縦 2 回タイリング → 4×3 出力。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out_g = [[1, 2, 3], [4, 5, 6], [1, 2, 3], [4, 5, 6]]
+    model = solvers.solve_tile_v(_task(inp, out_g))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out_g))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_v_same_size_returns_none() -> None:
+    """入出力サイズが同じなら tile_v は不適用。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile_v(_task(g, g)) is None
+
+
+def test_solve_tile_v_wrong_pattern_returns_none() -> None:
+    """出力がタイル パターンでない場合は None。"""
+    inp = [[1, 2], [3, 4]]
+    out_g = [[1, 2], [9, 9], [1, 2], [3, 4]]  # 2 行目が違う
+    assert solvers.solve_tile_v(_task(inp, out_g)) is None
+
+
+def test_solve_tile_v_in_solvers_list() -> None:
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile_v" in names
+
+
+# ─── tile_h ────────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_h_2x() -> None:
+    """2×3 入力を横 2 回タイリング → 2×6 出力。"""
+    inp = [[1, 2, 3], [4, 5, 6]]
+    out_g = [[1, 2, 3, 1, 2, 3], [4, 5, 6, 4, 5, 6]]
+    model = solvers.solve_tile_h(_task(inp, out_g))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out_g))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_h_same_size_returns_none() -> None:
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile_h(_task(g, g)) is None
+
+
+def test_solve_tile_h_in_solvers_list() -> None:
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile_h" in names
