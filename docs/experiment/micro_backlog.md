@@ -14,6 +14,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 030 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `2396 -> 2230` | `0.0718` | adopted case322 | Public Score improved `7183.72 -> 7183.79`. |
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
+| 274 | broadcast-compress `zero_small` from `uint8[1,1,3,3]` to `uint8[1,1,1,1]` | `177 -> 169` | `0.0463` | adopted case333 | Public Score improved `7184.88 -> 7184.93`. |
 | 334 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `197 -> 131` | `0.4080` | adopted case330 | Public Score improved `7184.33 -> 7184.74`; distinct from the earlier rejected `197 -> 230` variant. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
 | 348 | remove dead `zero_b` initializer left after packed-tail rewrite | `1968 -> 1858` | `0.0575` | adopted case332 | Public Score improved `7184.82 -> 7184.88`; params-only cleanup on current graph. |
