@@ -15,7 +15,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
-| 325 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2133 -> 1932` | `0.0991` | exact candidate | Found by case325 sparse-tail scan; stronger than `task250` and `task365`. |
+| 325 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2133 -> 1932` | `0.0991` | adopted case326 | Public Score improved `7184.05 -> 7184.15`. |
 | 250 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `3218 -> 3142` | `0.0239` | exact candidate | Found by case325 sparse-tail scan; lower ratio fallback. |
 | 365 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `4028 -> 3945` | `0.0208` | exact candidate | Found by case325 sparse-tail scan; lower ratio fallback. |
 | 158 | `mask_b_u8 -> nonbg_u8` | `33717 -> 32415` | `0.0399` | exact but not selected | Mutually exclusive with case313 `mask_a_u8 -> nonbg_u8`; applying both collapses pair channels and gives `n_fail=152`. Keep as an alternative if case313 is rejected. |
