@@ -123,3 +123,61 @@ def build_rot270(w: int) -> onnx.ModelProto:
     t = helper.make_node("Transpose", ["input"], ["t"], perm=[0, 1, 3, 2])
     g = helper.make_node("Gather", ["t", "idx"], ["output"], axis=2)
     return _model([t, g], [init])
+
+
+def _scale_idx(dim_in: int, k: int) -> list[int]:
+    """k 倍スケールアップの 30 要素インデックスマップ。
+
+    content 行/列 [0..dim_in) を各 k 回繰り返し、残りはゼロパディング行を維持する。
+    k * dim_in <= GRID_MAX を前提とする。
+    """
+    scaled = [r // k for r in range(k * dim_in)]
+    padding = list(range(dim_in, dim_in + (GRID_MAX - k * dim_in)))
+    return scaled + padding
+
+
+def build_scale_up_rows(h: int, k: int) -> onnx.ModelProto:
+    """各行を k 回繰り返す行方向スケール（params=30, memory=0）。
+
+    Gather(axis=2) 1 本で input → output へ直結するため中間テンソルが生じない。
+    k * h <= GRID_MAX を前提とする。
+    """
+    row_idx = _scale_idx(h, k)
+    init = helper.make_tensor("scale_row_idx", TensorProto.INT64, [GRID_MAX], row_idx)
+    node = helper.make_node("Gather", ["input", "scale_row_idx"], ["output"], axis=2)
+    return _model([node], [init])
+
+
+def build_scale_up_cols(w: int, k: int) -> onnx.ModelProto:
+    """各列を k 回繰り返す列方向スケール（params=30, memory=0）。
+
+    Gather(axis=3) 1 本で input → output へ直結するため中間テンソルが生じない。
+    k * w <= GRID_MAX を前提とする。
+    """
+    col_idx = _scale_idx(w, k)
+    init = helper.make_tensor("scale_col_idx", TensorProto.INT64, [GRID_MAX], col_idx)
+    node = helper.make_node("Gather", ["input", "scale_col_idx"], ["output"], axis=3)
+    return _model([node], [init])
+
+
+def build_scale_up_2d(h: int, w: int, k: int) -> onnx.ModelProto:
+    """行・列を共に k 回繰り返す 2D スケール（params=60, memory=36000）。
+
+    Gather(axis=2) で行を展開した中間テンソルに続き Gather(axis=3) で列を展開する。
+    k * h <= GRID_MAX かつ k * w <= GRID_MAX を前提とする。
+    """
+    row_idx = _scale_idx(h, k)
+    col_idx = _scale_idx(w, k)
+    row_init = helper.make_tensor(
+        "scale_row_idx", TensorProto.INT64, [GRID_MAX], row_idx
+    )
+    col_init = helper.make_tensor(
+        "scale_col_idx", TensorProto.INT64, [GRID_MAX], col_idx
+    )
+    g_rows = helper.make_node(
+        "Gather", ["input", "scale_row_idx"], ["scale_mid"], axis=2
+    )
+    g_cols = helper.make_node(
+        "Gather", ["scale_mid", "scale_col_idx"], ["output"], axis=3
+    )
+    return _model([g_rows, g_cols], [row_init, col_init])

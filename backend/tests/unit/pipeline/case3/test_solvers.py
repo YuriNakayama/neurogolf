@@ -348,3 +348,110 @@ def test_solve_panels_in_solvers_list() -> None:
     """solve_panels が SOLVERS リストに含まれていることを確認。"""
     names = [name for name, _ in solvers.SOLVERS]
     assert "panels" in names
+
+
+# ─── scale_up_rows ─────────────────────────────────────────────────────────
+
+
+def test_solve_scale_up_rows_k2() -> None:
+    """行方向 2× スケールタスクを正しく解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2], [1, 2], [3, 4], [3, 4]]
+    model = solvers.solve_scale_up_rows(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_up_rows_returns_none_for_same_shape() -> None:
+    """同形状（スケールなし）には None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_scale_up_rows(_task(g, g)) is None
+
+
+def test_solve_scale_up_rows_returns_none_when_cols_also_scale() -> None:
+    """行も列も変化（2D スケール）では None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out_2d = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_scale_up_rows(_task(inp, out_2d)) is None
+
+
+# ─── scale_up_cols ─────────────────────────────────────────────────────────
+
+
+def test_solve_scale_up_cols_k2() -> None:
+    """列方向 2× スケールタスクを正しく解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [3, 3, 4, 4]]
+    model = solvers.solve_scale_up_cols(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_up_cols_returns_none_for_same_shape() -> None:
+    """同形状には None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_scale_up_cols(_task(g, g)) is None
+
+
+def test_solve_scale_up_cols_returns_none_when_rows_also_scale() -> None:
+    """行も列も変化（2D スケール）では None を返す。"""
+    inp = [[1, 2], [3, 4]]
+    out_2d = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_scale_up_cols(_task(inp, out_2d)) is None
+
+
+# ─── scale_up_2d ───────────────────────────────────────────────────────────
+
+
+def test_solve_scale_up_2d_k2() -> None:
+    """2D 2× スケールタスクを正しく解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    model = solvers.solve_scale_up_2d(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_up_2d_k3() -> None:
+    """2D 3× スケールタスクを正しく解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [
+        [1, 1, 1, 2, 2, 2],
+        [1, 1, 1, 2, 2, 2],
+        [1, 1, 1, 2, 2, 2],
+        [3, 3, 3, 4, 4, 4],
+        [3, 3, 3, 4, 4, 4],
+        [3, 3, 3, 4, 4, 4],
+    ]
+    model = solvers.solve_scale_up_2d(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_scale_up_2d_returns_none_for_same_shape() -> None:
+    """同形状には None を返す。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_scale_up_2d(_task(g, g)) is None
+
+
+def test_solve_scale_up_2d_returns_none_for_rows_only_scale() -> None:
+    """行のみスケール（列不変）は 2D ソルバで None（k_h != k_w の検出対象外）。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2], [1, 2], [3, 4], [3, 4]]  # 行のみ 2×
+    assert solvers.solve_scale_up_2d(_task(inp, out)) is None
+
+
+def test_solve_scale_up_all_in_solvers_list() -> None:
+    """3 つのスケールソルバが SOLVERS リストに含まれる。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "scale_up_rows" in names
+    assert "scale_up_cols" in names
+    assert "scale_up_2d" in names
