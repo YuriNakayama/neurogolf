@@ -8,6 +8,12 @@ revisited when they can be bundled without breaking `n_fail=0`.
 
 | task | candidate | local cost | est gain | status | notes |
 |---|---|---:|---:|---|---|
+| 018 | safe3 local-equivalence bundle | `39583 -> 39311` | `0.0069` | exact micro, banked case353 | Scratch: `/tmp/neurogolf_case353_search/task018_safe3_eq_bundle.onnx`. Narrower than the 13/17-rewire variants, but still medium risk and below submit threshold. |
+| 018 | safe13 local-equivalence bundle | `39583 -> 39283` | `0.0076` | exact micro, banked case353 | Scratch: `/tmp/neurogolf_case353_search/task018_safe13_eq_bundle.onnx`. Higher risk due to 13 aliases; do not mix into low-risk batches. |
+| 066 | duplicate initializer cleanup | `16838 -> 16834` | `0.0002` | exact micro, banked case353 | Scratch: `/tmp/neurogolf_case353_search/task066_duplicate_init_cleanup.onnx`. Low-risk cleanup only. |
+| 206 | broadcast-compress `p33` to length 1 | `4184 -> 4183` | `0.0002` | exact micro, banked case353 | Scratch: `/tmp/neurogolf_case353_search/task206_p33_broadcast_len1.onnx`. One-byte cleanup. |
+| 222 | remove unused `ax23` initializer | `7597 -> 7595` | `0.0003` | exact micro, banked case353 | Scratch: `/tmp/neurogolf_case353_search/task222_remove_unused_ax23.onnx`. Low-risk cleanup only. |
+| 285 | connectivity shortcut near miss | `25630 -> 24323` | `0.0523` | rejected locally, n_fail=1 case353 | Scratch: `/tmp/neurogolf_case353/compact_scan/task285_conn_b_4_TO_pivot_src_grid.onnx`. Do not submit unless repaired to `n_fail=0`; promising case354 target. |
 | 219 | residual alias bundle: `mul_174 -> gat_164`, `gat_468 -> gat_392`, `red_497 -> red_345`, `red_501 -> red_425`, `red_505 -> red_429`, `pad_521 -> pad_445`, `sli_540 -> gat_537__h16` | `17240 -> 15964` | `0.0770` | adopted case314 | Found by case313 explorer after `task158` was already submitted. Avoid late `Max` aliases that failed correctness. |
 | 158 | diagonal slice alias bundle: `tr28 -> tl28`, `br28 -> bl28` | `32414 -> 31294` | `0.0352` | adopted case346 | Public Score improved `7185.33 -> 7185.37`; symmetric alternative had the same local result and was not submitted. |
 | 174 | `mismatch_inside_43 -> mismatch_42` | `9326 -> 8978` | `0.0380` | adopted case315 | Found by case313 explorer after `task158` was already submitted. Rewired the `Cast` consumer and pruned the dynamic inside-mask chain. |
