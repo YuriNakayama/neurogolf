@@ -15,6 +15,16 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
 | 274 | broadcast-compress `zero_small` from `uint8[1,1,3,3]` to `uint8[1,1,1,1]` | `177 -> 169` | `0.0463` | adopted case333 | Public Score improved `7184.88 -> 7184.93`. |
+| 319 | `obj1_*` row/view alias bundle | `21723 -> 20519` | `0.0570` | adopted case334 | Public Score improved `7184.93 -> 7184.98`; do not mirror to `obj2_*`, which failed correctness. |
+| 209 | alias both uniform-branch MaxPool outputs: `max_s3 -> label_f`, `max_s4 -> label_f` | `29483 -> 28683` | `0.0275` | exact candidate | Second-best case334 structural candidate; keep as next standalone if case334 task319 is adopted. |
+| 233 | compatible four-alias bundle: `whe118_strict_valid -> gre107`, `abs174 -> sub173`, `whe194 -> res193`, `whe198_strict_valid -> and182` | `51068 -> 50942` | `0.0025` | exact micro | `whe118_strict_valid -> gre107` and `whe159_strict_valid -> and142` are mutually incompatible together; either can be used in this bundle for same cost. |
+| 363 | broadcast-compress `kt1` from `(1,1,4,4)` to `(1,1,4,1)` | `4360 -> 4348` | `0.0028` | exact micro | Found by case334 parallel scan; below standalone threshold unless same-task bundle appears. |
+| 206 | broadcast-compress `p33` from `(2,)` to `(1,)` | `4184 -> 4183` | `0.0002` | exact micro | Found by case334 parallel scan; one-byte cleanup only. |
+| 334 | duplicate initializer cleanup: `probe_wzp -> probe_zp` | `131 -> 130` | `0.0077` | exact micro | Current post-case330 graph; best duplicate-initializer micro from case334 scan. |
+| 052 | duplicate initializer cleanup: `tailpack_052_wzp -> tailpack_052_xzp` | `209 -> 208` | `0.0048` | exact micro | Current post-case331 graph; keep for future micro bundle. |
+| 003 | duplicate initializer cleanup: `probe_wzp -> probe_zp` | `263 -> 262` | `0.0038` | exact micro | Current post-case329 graph; keep for future micro bundle. |
+| 325 | duplicate initializer cleanup: one of `pt_scale -> q_scale`, `pt_xzp -> u8_zp`, or `pt_wzp -> i8_zp` | `1932 -> 1931` | `0.0005` | exact micro | Alternate one-byte removals found by case334 duplicate-initializer scan. |
+| 023 | duplicate initializer cleanup on current graph: `Ksc -> Ksb` | `11222 -> 11218` | `0.0004` | exact micro | Current post-case323 graph; smaller than earlier case299 baseline after accepted tail pack. |
 | 334 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `197 -> 131` | `0.4080` | adopted case330 | Public Score improved `7184.33 -> 7184.74`; distinct from the earlier rejected `197 -> 230` variant. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
 | 348 | remove dead `zero_b` initializer left after packed-tail rewrite | `1968 -> 1858` | `0.0575` | adopted case332 | Public Score improved `7184.82 -> 7184.88`; params-only cleanup on current graph. |
