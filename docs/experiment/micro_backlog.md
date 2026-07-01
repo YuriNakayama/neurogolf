@@ -17,14 +17,20 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 274 | broadcast-compress `zero_small` from `uint8[1,1,3,3]` to `uint8[1,1,1,1]` | `177 -> 169` | `0.0463` | adopted case333 | Public Score improved `7184.88 -> 7184.93`. |
 | 319 | `obj1_*` row/view alias bundle | `21723 -> 20519` | `0.0570` | adopted case334 | Public Score improved `7184.93 -> 7184.98`; do not mirror to `obj2_*`, which failed correctness. |
 | 209 | alias both uniform-branch MaxPool outputs: `max_s3 -> label_f`, `max_s4 -> label_f` | `29483 -> 28683` | `0.0275` | adopted case335 | Public Score improved `7184.98 -> 7185.01`; second-best case334 structural candidate adopted after task319. |
+| 055 | row/column alias bundle: `rbC -> rb`, `cbC -> cb` | `3337 -> 3216` | `0.0369` | adopted case336 | Public Score improved `7185.01 -> 7185.05`; best exact candidate from post-case335 equivalence scan. |
+| 382 | alias bundle: `h_s4 -> hsrc`, `v_s4 -> vsrc` | `5772 -> 5730` | `0.0073` | exact micro | Post-case335 equivalence scan; below standalone threshold unless no stronger candidate remains. |
+| 090 | 9 area/best-row aliases | `3091 -> 3073` | `0.0058` | exact micro | Post-case335 equivalence scan; local exact, low expected LB movement. |
+| 366 | 25 equivalence aliases around gap/base/valid tensors | `36385 -> 36236` | `0.0041` | exact micro | High absolute cost but low relative gain; broad alias bundle may be hidden-sensitive. |
+| 213 | 5 `h_valid* -> h_valid_and01` aliases | `1887 -> 1882` | `0.0027` | exact micro | Post-case335 equivalence scan. |
+| 157 | 19 local equivalence aliases | `8163 -> 8143` | `0.0025` | exact micro | Exact but broad and small; keep as backlog material. |
 | 233 | compatible four-alias bundle: `whe118_strict_valid -> gre107`, `abs174 -> sub173`, `whe194 -> res193`, `whe198_strict_valid -> and182` | `51068 -> 50942` | `0.0025` | exact micro | `whe118_strict_valid -> gre107` and `whe159_strict_valid -> and142` are mutually incompatible together; either can be used in this bundle for same cost. |
 | 363 | broadcast-compress `kt1` from `(1,1,4,4)` to `(1,1,4,1)` | `4360 -> 4348` | `0.0028` | exact micro | Found by case334 parallel scan; below standalone threshold unless same-task bundle appears. |
 | 206 | broadcast-compress `p33` from `(2,)` to `(1,)` | `4184 -> 4183` | `0.0002` | exact micro | Found by case334 parallel scan; one-byte cleanup only. |
 | 334 | duplicate initializer cleanup: `probe_wzp -> probe_zp` | `131 -> 130` | `0.0077` | exact micro | Current post-case330 graph; best duplicate-initializer micro from case334 scan. |
 | 052 | duplicate initializer cleanup: `tailpack_052_wzp -> tailpack_052_xzp` | `209 -> 208` | `0.0048` | exact micro | Current post-case331 graph; keep for future micro bundle. |
 | 003 | duplicate initializer cleanup: `probe_wzp -> probe_zp` | `263 -> 262` | `0.0038` | exact micro | Current post-case329 graph; keep for future micro bundle. |
-| 325 | duplicate initializer cleanup: one of `pt_scale -> q_scale`, `pt_xzp -> u8_zp`, or `pt_wzp -> i8_zp` | `1932 -> 1931` | `0.0005` | exact micro | Alternate one-byte removals found by case334 duplicate-initializer scan. |
-| 023 | duplicate initializer cleanup on current graph: `Ksc -> Ksb` | `11222 -> 11218` | `0.0004` | exact micro | Current post-case323 graph; smaller than earlier case299 baseline after accepted tail pack. |
+| 325 | duplicate initializer cleanup bundle: `pt_scale -> q_scale`, `pt_xzp -> u8_zp`, `pt_wzp -> i8_zp` | `1932 -> 1929` | `0.0016` | exact micro | Post-case335 cleanup scan confirmed the three one-byte removals are compatible. |
+| 023 | duplicate initializer cleanup bundle: `Ksc -> Ksb`, `Khc -> Khb`, `Kvc -> Kvb` | `11222 -> 11212` | `0.0009` | exact micro | Current post-case323 graph; same family as rejected standalone case299, keep for bundle. |
 | 334 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `197 -> 131` | `0.4080` | adopted case330 | Public Score improved `7184.33 -> 7184.74`; distinct from the earlier rejected `197 -> 230` variant. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
 | 348 | remove dead `zero_b` initializer left after packed-tail rewrite | `1968 -> 1858` | `0.0575` | adopted case332 | Public Score improved `7184.82 -> 7184.88`; params-only cleanup on current graph. |
