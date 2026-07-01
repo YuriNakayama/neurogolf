@@ -18,6 +18,11 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 319 | `obj1_*` row/view alias bundle | `21723 -> 20519` | `0.0570` | adopted case334 | Public Score improved `7184.93 -> 7184.98`; do not mirror to `obj2_*`, which failed correctness. |
 | 209 | alias both uniform-branch MaxPool outputs: `max_s3 -> label_f`, `max_s4 -> label_f` | `29483 -> 28683` | `0.0275` | adopted case335 | Public Score improved `7184.98 -> 7185.01`; second-best case334 structural candidate adopted after task319. |
 | 055 | row/column alias bundle: `rbC -> rb`, `cbC -> cb` | `3337 -> 3216` | `0.0369` | adopted case336 | Public Score improved `7185.01 -> 7185.05`; best exact candidate from post-case335 equivalence scan. |
+| 286 | 395 local-equivalence rewires in bitwise chain | `47013 -> 43985` | `0.0666` | rejected hidden-unsafe case337 | Local `n_fail=0` but Public regressed `7185.05 -> 7170.81`; broad task286 bitwise local-equivalence bundle is hidden-unsafe. |
+| 173 | `p_nz -> v_nz` | `15721 -> 15702` | `0.0012` | exact micro | Found by post-case336 equivalence scan; task173 has prior adopted work, keep only for bundle. |
+| 397 | `m4 -> three_new` | `2848 -> 2845` | `0.0011` | exact micro | Found by post-case336 equivalence scan. |
+| 280 | `dir_up -> not_up1`, `dir_down -> not_down1` | `6039 -> 6035` | `0.0007` | exact micro | Found by post-case336 equivalence scan; prior task280 probe was a different rejected family. |
+| 377 | `depth_i32 -> depth_i` | `8373 -> 8368` | `0.0006` | exact micro | Found by post-case336 equivalence scan. |
 | 382 | alias bundle: `h_s4 -> hsrc`, `v_s4 -> vsrc` | `5772 -> 5730` | `0.0073` | exact micro | Post-case335 equivalence scan; below standalone threshold unless no stronger candidate remains. |
 | 090 | 9 area/best-row aliases | `3091 -> 3073` | `0.0058` | exact micro | Post-case335 equivalence scan; local exact, low expected LB movement. |
 | 366 | 25 equivalence aliases around gap/base/valid tensors | `36385 -> 36236` | `0.0041` | exact micro | High absolute cost but low relative gain; broad alias bundle may be hidden-sensitive. |
