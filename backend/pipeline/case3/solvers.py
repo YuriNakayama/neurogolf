@@ -131,6 +131,99 @@ def solve_rot270(task: Task) -> onnx.ModelProto | None:
     return None
 
 
+# --- scale up (row/col repeat) -----------------------------------------------
+GRID_MAX = B.GRID_MAX
+
+
+def _out_dim(task: Task, *, axis: int) -> int | None:
+    """全 example で出力グリッドの axis 次元が一定なら返す。"""
+    dims = {grid_shape(e.output)[axis] for e in task.valid_examples()}
+    return next(iter(dims)) if len(dims) == 1 else None
+
+
+def _scale_k(task: Task, *, axis: int) -> int | None:
+    """axis 方向の整数スケール係数 K>=2 を検出。k*dim_in<=GRID_MAX を要求。"""
+    dim_in = _const_dim(task, axis=axis)
+    dim_out = _out_dim(task, axis=axis)
+    if dim_in is None or dim_out is None or dim_out <= dim_in or dim_out % dim_in != 0:
+        return None
+    k = dim_out // dim_in
+    if k < 2 or k * dim_in > GRID_MAX:
+        return None
+    return k
+
+
+def _is_scale_rows_1d(e: Example, h: int, k: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape[0] != h or out.shape != (k * h, inp.shape[1]):
+        return False
+    return bool(np.array_equal(out, np.repeat(inp, k, axis=0)))
+
+
+def _is_scale_cols_1d(e: Example, w: int, k: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape[1] != w or out.shape != (inp.shape[0], k * w):
+        return False
+    return bool(np.array_equal(out, np.repeat(inp, k, axis=1)))
+
+
+def _is_scale_2d(e: Example, h: int, w: int, k: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape != (h, w) or out.shape != (k * h, k * w):
+        return False
+    return bool(np.array_equal(out, np.repeat(np.repeat(inp, k, axis=0), k, axis=1)))
+
+
+def solve_scale_up_rows(task: Task) -> onnx.ModelProto | None:
+    """行方向 k 倍（列不変）の Gather 1 本ソルバ（cost≈30）。"""
+    k = _scale_k(task, axis=0)
+    if k is None:
+        return None
+    h = _const_dim(task, axis=0)
+    if h is None:
+        return None
+    w_in = _const_dim(task, axis=1)
+    w_out = _out_dim(task, axis=1)
+    if w_in is None or w_out is None or w_in != w_out:
+        return None
+    if not _all(task, lambda e: _is_scale_rows_1d(e, h, k)):
+        return None
+    return B.build_scale_up_rows(h, k)
+
+
+def solve_scale_up_cols(task: Task) -> onnx.ModelProto | None:
+    """列方向 k 倍（行不変）の Gather 1 本ソルバ（cost≈30）。"""
+    k = _scale_k(task, axis=1)
+    if k is None:
+        return None
+    w = _const_dim(task, axis=1)
+    if w is None:
+        return None
+    h_in = _const_dim(task, axis=0)
+    h_out = _out_dim(task, axis=0)
+    if h_in is None or h_out is None or h_in != h_out:
+        return None
+    if not _all(task, lambda e: _is_scale_cols_1d(e, w, k)):
+        return None
+    return B.build_scale_up_cols(w, k)
+
+
+def solve_scale_up_2d(task: Task) -> onnx.ModelProto | None:
+    """行・列両方向 k 倍の 2D スケールアップソルバ（cost≈36060）。"""
+    k_h = _scale_k(task, axis=0)
+    k_w = _scale_k(task, axis=1)
+    if k_h is None or k_w is None or k_h != k_w:
+        return None
+    k = k_h
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    if h is None or w is None:
+        return None
+    if not _all(task, lambda e: _is_scale_2d(e, h, w, k)):
+        return None
+    return B.build_scale_up_2d(h, w, k)
+
+
 # --- recolor (global color map) ---------------------------------------------
 def _recolor_mapping(task: Task) -> dict[int, int] | None:
     if not _all(task, _same_shape):
@@ -231,6 +324,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("transpose", solve_transpose),
     ("flip_v", solve_flip_v),
     ("flip_h", solve_flip_h),
+    ("scale_up_rows", solve_scale_up_rows),
+    ("scale_up_cols", solve_scale_up_cols),
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
@@ -241,5 +336,6 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("residual3", solve_residual3),
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
+    ("scale_up_2d", solve_scale_up_2d),
     ("floodfill", solve_floodfill),
 ]

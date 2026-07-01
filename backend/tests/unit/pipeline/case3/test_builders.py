@@ -132,6 +132,97 @@ def test_rot270_3x3() -> None:
     assert _argmax_grid(out, 3, 3) == expected
 
 
+# ─── scale_up_rows (axis=2, row repeat) ────────────────────────────────────
+
+
+def test_scale_up_rows_k2_2x2() -> None:
+    """2×2 グリッドを行方向 2× スケール → 4×2。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_rows(2, 2), g)
+    expected = [[1, 2], [1, 2], [3, 4], [3, 4]]
+    assert _argmax_grid(out, 4, 2) == expected
+
+
+def test_scale_up_rows_k3() -> None:
+    """3× 行スケール: 2 行 → 6 行。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_rows(2, 3), g)
+    expected = [[1, 2], [1, 2], [1, 2], [3, 4], [3, 4], [3, 4]]
+    assert _argmax_grid(out, 6, 2) == expected
+
+
+def test_scale_up_rows_preserves_zero_padding() -> None:
+    """スケール後も content 外の行はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_rows(2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+
+
+# ─── scale_up_cols (axis=3, col repeat) ────────────────────────────────────
+
+
+def test_scale_up_cols_k2_2x2() -> None:
+    """2×2 グリッドを列方向 2× スケール → 2×4。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_cols(2, 2), g)
+    expected = [[1, 1, 2, 2], [3, 3, 4, 4]]
+    assert _argmax_grid(out, 2, 4) == expected
+
+
+def test_scale_up_cols_k3() -> None:
+    """3× 列スケール: 2 列 → 6 列。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_cols(2, 3), g)
+    expected = [[1, 1, 1, 2, 2, 2], [3, 3, 3, 4, 4, 4]]
+    assert _argmax_grid(out, 2, 6) == expected
+
+
+def test_scale_up_cols_preserves_zero_padding() -> None:
+    """スケール後も content 外の列はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_cols(2, 2), g)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
+# ─── scale_up_2d (row + col repeat) ────────────────────────────────────────
+
+
+def test_scale_up_2d_k2_2x2() -> None:
+    """2×2 グリッドを 2D 2× スケール → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_2d(2, 2, 2), g)
+    expected = [
+        [1, 1, 2, 2],
+        [1, 1, 2, 2],
+        [3, 3, 4, 4],
+        [3, 3, 4, 4],
+    ]
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_scale_up_2d_k3_2x3() -> None:
+    """2×3 グリッドを 2D 3× スケール → 6×9。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    out = _run(B.build_scale_up_2d(2, 3, 3), g)
+    expected = [
+        [1, 1, 1, 2, 2, 2, 3, 3, 3],
+        [1, 1, 1, 2, 2, 2, 3, 3, 3],
+        [1, 1, 1, 2, 2, 2, 3, 3, 3],
+        [4, 4, 4, 5, 5, 5, 6, 6, 6],
+        [4, 4, 4, 5, 5, 5, 6, 6, 6],
+        [4, 4, 4, 5, 5, 5, 6, 6, 6],
+    ]
+    assert _argmax_grid(out, 6, 9) == expected
+
+
+def test_scale_up_2d_preserves_zero_padding() -> None:
+    """2D スケール後も content 外はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_scale_up_2d(2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
 # ─── onnx.checker pass ─────────────────────────────────────────────────────
 
 
@@ -144,6 +235,9 @@ def test_rot270_3x3() -> None:
         B.build_rot180(3, 3),
         B.build_rot90(3),
         B.build_rot270(3),
+        B.build_scale_up_rows(3, 2),
+        B.build_scale_up_cols(3, 2),
+        B.build_scale_up_2d(3, 3, 2),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
