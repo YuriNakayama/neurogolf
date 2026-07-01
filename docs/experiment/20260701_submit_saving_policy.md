@@ -79,6 +79,36 @@ To save submits while preserving diagnosability:
 5. Do not mix broad local-equivalence candidates with low-risk cleanup
    candidates in the same submit.
 
+## 30-Minute Submit Cadence
+
+Default cadence after 2026-07-01 23:49 JST:
+
+```text
+submit window: about once every 30 minutes
+minimum standalone candidate: same thresholds as above
+minimum low-risk batch: total expected gain >= 0.030
+minimum mixed-risk batch: total expected gain >= 0.050 and no hidden-unsafe family
+```
+
+The clock is a budget guard, not a reason to submit weak material. At each
+30-minute window:
+
+1. Submit immediately if there is one isolated threshold-clearing candidate.
+2. Otherwise submit a low-risk micro batch if accumulated expected gain clears
+   `0.030` and every changed task has `audit_one n_fail=0`.
+3. Otherwise skip the Kaggle submit, write/update the case result, and keep
+   banking exact local candidates in `micro_backlog.md`.
+
+For batched submits, keep the batch small enough to bisect in one follow-up:
+
+- Prefer 2-5 low-risk tasks per submit.
+- Avoid combining task families with known hidden/public sensitivity.
+- Keep medium/high-risk candidates isolated unless their standalone gain is
+  strong enough to justify the submit by itself.
+- If a batch regresses, restore baseline, then test only the largest-gain half
+  first; do not spend one submit per micro candidate unless the batch total was
+  large enough to justify the bisection.
+
 ## Scheduler Policy
 
 Keep automatic scheduled submits disabled unless explicitly running a controlled
