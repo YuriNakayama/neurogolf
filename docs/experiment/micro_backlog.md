@@ -16,6 +16,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
 | 334 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `197 -> 131` | `0.4080` | adopted case330 | Public Score improved `7184.33 -> 7184.74`; distinct from the earlier rejected `197 -> 230` variant. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
+| 348 | remove dead `zero_b` initializer left after packed-tail rewrite | `1968 -> 1858` | `0.0575` | adopted case332 | Public Score improved `7184.82 -> 7184.88`; params-only cleanup on current graph. |
 | 003 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `302 -> 263` | `0.1383` | adopted case329 | Public Score improved `7184.19 -> 7184.33`; small absolute task but high relative gain. |
 | 052 | packed bool strip tail, cast to uint8, then one-hot `QLinearConv` projection and final pad | `227 -> 209` | `0.0826` | adopted case331 | Public Score improved `7184.74 -> 7184.82`. |
 | 325 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2133 -> 1932` | `0.0991` | adopted case326 | Public Score improved `7184.05 -> 7184.15`. |
