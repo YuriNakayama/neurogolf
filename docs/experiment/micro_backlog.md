@@ -90,3 +90,22 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 133 | `sg_gate_2 -> sg_eqi_2` | `33573 -> 33572` | `0.00003` | exact micro | Found by case316 source-crop/single-consumer scan; one-byte equivalent `ReduceMin` alias. |
 | 133 | `sg_gate_3 -> sg_eqi_3` | `33573 -> 33572` | `0.00003` | exact micro | Found by case316 source-crop/single-consumer scan; independent one-byte equivalent `ReduceMin` alias. |
 | 133 | `sg_gate_4 -> sg_eqi_4` | `33573 -> 33572` | `0.00003` | exact micro | Found by case316 source-crop/single-consumer scan; independent one-byte equivalent `ReduceMin` alias. |
+
+## 20260702
+
+| task | candidate | local cost | est gain | status | notes |
+|---|---|---:|---:|---|---|
+| 382 | alias combo: `h_s0 -> hsrc`, `h_s8 -> hsrc`, `v_s0 -> vsrc` | `5730 -> 5670` | `0.010526` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_t382_combo/task382_h_s0_TO_hsrc__h_s8_TO_hsrc__v_s0_TO_vsrc.onnx`. Low-medium alias; best case357 exact candidate but below standalone threshold. |
+| 173 | `p_nz -> v_nz` | `15721 -> 15702` | `0.001209` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task173_p_nz_TO_v_nz.onnx`. Low-risk single alias. |
+| 397 | `m4 -> three_new` | `2848 -> 2845` | `0.001054` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task397_m4_TO_three_new.onnx`. Low-risk single alias. |
+| 280 | `dir_up -> not_up1`, `dir_down -> not_down1` | `6039 -> 6035` | `0.000663` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task280_dir_up_TO_not_up1__dir_down_TO_not_down1.onnx`. Low-risk pair. |
+| 377 | `depth_i32 -> depth_i` | `8373 -> 8368` | `0.000597` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task377_depth_i32_TO_depth_i.onnx`. Low-risk single alias. |
+| 096 | `length_updates -> length_u8` | `8823 -> 8818` | `0.000567` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task096_length_updates_TO_length_u8.onnx`. Low-risk single alias. |
+| 396 | `am1 -> A1f` | `8080 -> 8078` | `0.000248` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task396_am1_TO_A1f.onnx`. Low-risk single alias. |
+| 133 | `sg_gate_2/3/4 -> sg_eqi_2/3/4` | `33573 -> 33570` | `0.000089` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task133_sg_gate_2_TO_sg_eqi_2__sg_gate_3_TO_sg_eqi_3__sg_gate_4_TO_sg_eqi_4.onnx`. Broad deterministic cleanup `33573 -> 32480` failed with `n_fail=267`; do not submit that variant. |
+| 325 | duplicate initializer cleanup bundle | `1932 -> 1929` | `0.001554` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task325.onnx` or `/tmp/neurogolf_case357_low/task325_cleanup.onnx`. Low-risk cleanup. |
+| 379 | case3 surgery cleanup | `10774 -> 10773` | `0.000093` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task379.onnx` or `/tmp/neurogolf_case357_low/task379_cleanup.onnx`. Low-risk cleanup. |
+| 285 | cleanup after accepted bridge guard | `24537 -> 24512` | `0.001019` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task285.onnx`. Low-risk cleanup; below threshold. |
+| 023 | duplicate initializer cleanup on current graph | `11222 -> 11212` | `0.000892` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task023.onnx`. Low-risk cleanup; below threshold. |
+| 222 | remove unused initializer on current graph | `7597 -> 7595` | `0.000263` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task222.onnx`. Low-risk cleanup. |
+| 066 | case3 surgery cleanup on current graph | `16838 -> 16835` | `0.000178` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_surgery_all/task066.onnx`. Low-risk cleanup. |
