@@ -15,6 +15,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
 | 348 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2273 -> 1968` | `0.1440` | adopted case325 | Public Score improved `7183.91 -> 7184.05`. |
+| 003 | packed uint8 live channels, then one-hot `QLinearConv` projection and final pad | `302 -> 263` | `0.1383` | adopted case329 | Public Score improved `7184.19 -> 7184.33`; small absolute task but high relative gain. |
 | 325 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `2133 -> 1932` | `0.0991` | adopted case326 | Public Score improved `7184.05 -> 7184.15`. |
 | 250 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `3218 -> 3142` | `0.0239` | adopted case327 | Public Score improved `7184.15 -> 7184.17`; confirms that small exact candidates can still accumulate. |
 | 365 | packed bool live channels, cast to uint8, then one-hot `QLinearConv` projection and final pad | `4028 -> 3945` | `0.0208` | adopted case328 | Public Score improved `7184.17 -> 7184.19`; remaining validated packed-tail queue is exhausted. |
@@ -23,7 +24,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 378 | `outer_bottom_f16 -> outer_bottom_raw` plus `outer_right_f16 -> outer_right_raw` | `3728 -> 3722` | `0.0016` | marginal fallback | Larger bbox/selector aliases failed; previous submit did not move Public. |
 | 092 | `h_right_idx_active -> h_right_idx` plus `v_bottom_idx_active -> v_bottom_idx` | `6992 -> 6982` | `0.0014` | marginal fallback | Other guard/branch removals failed; previous submit did not move Public. |
 | 234 | `rect_h -> rect_extent` plus `rect_w -> rect_extent`, prune dead `Where` nodes | `6853 -> 6845` | `0.0012` | marginal fallback | Other terminal grid aliases failed; previous submit did not move Public. |
-| 334 | packed bool/uint8 projection tail | `197 -> 230` | `-0.1547` | rejected locally | Worsened cost; record to avoid rediscovery. |
+| 334 | packed bool/uint8 projection tail, earlier variant | `197 -> 230` | `-0.1547` | rejected locally | Worsened cost; do not confuse with the later reported distinct `197 -> 131` probe, which still needs direct validation. |
 | 245 | packed bool/uint8 projection tail | `2743 -> 2868` | `-0.0446` | rejected locally | Worsened cost in subagent probe; record to avoid rediscovery. |
 | 103 | packed bool/uint8 projection tail | `60 -> 72` | `-0.1823` | rejected locally | Worsened very small task; projection overhead dominates. |
 | 158 | `mask_b_u8 -> nonbg_u8` | `33717 -> 32415` | `0.0399` | exact but not selected | Mutually exclusive with case313 `mask_a_u8 -> nonbg_u8`; applying both collapses pair channels and gives `n_fail=152`. Keep as an alternative if case313 is rejected. |
