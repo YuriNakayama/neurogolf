@@ -28,6 +28,10 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 334 | packed bool/uint8 projection tail, earlier variant | `197 -> 230` | `-0.1547` | rejected locally | Worsened cost; superseded by adopted case330's direct uint8 live-channel projection. |
 | 245 | packed bool/uint8 projection tail | `2743 -> 2868` | `-0.0446` | rejected locally | Worsened cost in subagent probe; record to avoid rediscovery. |
 | 103 | packed bool/uint8 projection tail | `60 -> 72` | `-0.1823` | rejected locally | Worsened very small task; projection overhead dominates. |
+| 002 | packed terminal sparse-tail probe | `21089 -> 21113` | `-0.0011` | rejected locally | Projection added params without reducing memory; record to avoid rediscovery. |
+| 226 | packed terminal sparse-tail probe | `1633 -> 1978` | `-0.1917` | rejected locally | Projection overhead and memory increase dominate. |
+| 338 | packed terminal sparse-tail probe | `17939 -> 20662` | `-0.1413` | rejected locally | Packed-tail candidate increases memory substantially; do not submit. |
+| 395 | packed terminal sparse-tail probe | `165 -> 182` | `-0.0981` | rejected locally | Very small task; projection overhead dominates. |
 | 158 | `mask_b_u8 -> nonbg_u8` | `33717 -> 32415` | `0.0399` | exact but not selected | Mutually exclusive with case313 `mask_a_u8 -> nonbg_u8`; applying both collapses pair channels and gives `n_fail=152`. Keep as an alternative if case313 is rejected. |
 | 080 | `isol -> nonb`, `ecells0 -> eblk`, `ccells -> cblk` | `17136 -> 16836` | `0.0176` | adopted case275 | Bundled exact mask aliases; moved Public LB. |
 | 080 | remove redundant `hascorner` / `cblk2` guard | `16836 -> 16734` | `0.0061` | adopted case300 | Semantic guard removal; Public LB moved despite small gain. |
