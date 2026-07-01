@@ -13,7 +13,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 271 | packed two live float16 channels, then one-hot `Conv` channel projection and final pad | `1187 -> 1090` | `0.0853` | adopted case321 | Same sparse-tail pattern as cases 318-320. Public Score improved `7183.64 -> 7183.72`. |
 | 030 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `2396 -> 2230` | `0.0718` | adopted case322 | Public Score improved `7183.72 -> 7183.79`. |
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
-| 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | exact candidate | Temporary artifact: `/tmp/task266_packed_tail.onnx`. Small absolute delta, but keep because small gains can accumulate. |
+| 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
 | 158 | `mask_b_u8 -> nonbg_u8` | `33717 -> 32415` | `0.0399` | exact but not selected | Mutually exclusive with case313 `mask_a_u8 -> nonbg_u8`; applying both collapses pair channels and gives `n_fail=152`. Keep as an alternative if case313 is rejected. |
 | 080 | `isol -> nonb`, `ecells0 -> eblk`, `ccells -> cblk` | `17136 -> 16836` | `0.0176` | adopted case275 | Bundled exact mask aliases; moved Public LB. |
 | 080 | remove redundant `hascorner` / `cblk2` guard | `16836 -> 16734` | `0.0061` | adopted case300 | Semantic guard removal; Public LB moved despite small gain. |
