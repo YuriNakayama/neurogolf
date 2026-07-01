@@ -4,7 +4,7 @@
 
 ## やること（時間内で回せるだけ）
 1. **現状精度の把握**: `backend/` で既存ソルバの cost/score を確認（`uv run python -m submit validate --onnx-dir data/output/onnx` 等が使えるなら使う）。どのタスク種別が未解決かを洗い出す。
-2. **改善案の具体化**: 未解決タスクのうち、小さな ONNX で解けそうな変換パターンを特定し、実装方針（必要な op・概算 cost）をまとめる（要点を出力に残す）。
+2. **改善案の具体化**: `n_fail=0` を絶対条件に、絶対 cost ではなく期待相対削減率 `old_cost / new_cost` が大きい候補を探す。狙い目は中〜高 cost で、冗長な中間テンソル・dtype 境界・branch・initializer table を丸ごと消せそうな task。実装方針（必要な op・概算 cost・期待 `ln(old/new)`）をまとめる。
 3. **Web 調査**: ARC-AGI の典型変換、ONNX で最小に表現する手法、google/arc-gen の傾向などを調べ、次サイクルの implement プロンプトに効く知見を要約する。
 
 ## 制約

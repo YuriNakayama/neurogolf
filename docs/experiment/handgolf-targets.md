@@ -1,18 +1,32 @@
 # Handgolf 対象タスク worklist（faithful 採点ベース）
 
-公開最高 bundle（7166.66 / 別セッション handgolf v1 で 7166.79）の高コストタスクを、
+公開最高 bundle（7166.66 / 別セッション handgolf v1 で 7166.79）の cost 削減候補を、
 **faithful scorer（onnx 1.20.0/ort 1.24.1, offset +0.11）で実測した cost** と
-**ルールの単純さ指標**でランク付けしたもの。handgolf（タスク毎に最小 ONNX を手設計）の
-ROI が高い順に並ぶ。生データ: `handgolf-targets.json`。
+**ルールの単純さ指標**で整理したもの。古い版は高 cost を強く見ていたが、score は
+対数なので、今後の handgolf ROI は `old_cost / new_cost` の期待相対削減率で見る。
+生データ: `handgolf-targets.json`。
 
 ## 読み方
 
-- `cost` = faithful 実測（params+memory）。`pts` = 25-ln(cost)。cost を下げた分だけ点が増える。
+- `cost` = faithful 実測（params+memory）。`pts` = 25-ln(cost)。
+- cost 削減の点差は `ln(old_cost / new_cost)`。同じ 10% 削減なら cost の大小に関係なく
+  同じ点差で、同じ固定 cost 削減なら小さい task の方が点効率は高い。
 - `change_frac` = 変化セル率。**低いほど局所的＝ルールが単純で安価化しやすい**。
 - `bg_only` = 変化が背景(0)セルのみか。`sameshape` = 入出力同形状か。
 - `ncolors` = 入力の色数（少ないほど単純）。
 
-## 最優先候補（高コスト × 低 change_frac = 単純な局所ルール）
+## 優先度（改定）
+
+1. `n_fail=0` を絶対条件にする。不正解・unscorable は 0 点。
+2. 絶対 cost ではなく、期待 `old_cost / new_cost` が大きい候補を優先する。
+3. 低 cost 単純 task は既に最小化済みが多く、高 cost hard task も near-optimal が多い。
+   狙い目は「中〜高 cost で、構造的に過剰な中間テンソル・dtype 境界・branch・table を
+   丸ごと削れる task」。
+
+## 旧候補（高コスト × 低 change_frac）
+
+以下は「高 cost かつ見た目が単純」という旧 worklist。現在は最優先リストではなく、
+相対削減率の大きい具体的な削減仮説がある場合だけ着手する。
 
 | task | cost | pts | change_frac | colors | 期待 ROI |
 |---|---|---|---|---|---|
@@ -25,7 +39,8 @@ ROI が高い順に並ぶ。生データ: `handgolf-targets.json`。
 | 367/76/285 | ~26k | ~14.85 | ~0.06 | — | 中 |
 
 例: t118 を cost 42418→~500 に安価化できれば pts 14.34→18.79 = **+4.45**。
-~30 タスクで同様の安価化 = +100 規模 → 7665 に近づく。
+ただし後続実験で、高 cost 非局所 task は bundle が bbox-crop/uint8/反復数まで
+near-optimal に golf 済みの例が多いと確認済み。大 cost だけを理由に選ばない。
 
 ## 検証手順（必須）
 

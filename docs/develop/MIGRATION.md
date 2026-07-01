@@ -49,7 +49,7 @@ PTCG ドメインを置き換える NeuroGolf 中核を実装済み。`dev/test-
   - `loader.py`: ARC task JSON パース + `.arcgen.json` サイドカー + `taskNNN` id 採番
 - **`backend/src/onnxgolf/`（新規）— ビルド/スコア基盤**:
   - `constraints.py`: I/O 形状・静的形状・禁止演算（`Loop`/`Scan`/`NonZero`/`Unique`/`Script`/`Function`）・1.44MB を `check_constraints` で検証
-  - `cost.py`: `estimate_cost`（params + memory + MACs、`shape_inference` ベース）+ `task_score` = `max(1, 25 - ln(cost))`
+  - `cost.py`: `estimate_cost`（params + memory、`shape_inference` ベース）+ `task_score` = `max(1, 25 - ln(max(1, cost)))`
   - `build.py`: `make_io` / `build_model`（`onnx.checker` 通過）/ `save_model`（制約検証付き保存）
 - **`backend/src/submit/`（ONNX 化）**: `packager.py` を tar.gz → **`submission.zip`**（`taskNNN.onnx` を flat zip、決定的メタ）に作り替え。`validator.py` を ONNX 検証（checker + 制約 + cost/score）に。`__main__.py` を `submit` / `validate` / `submissions` サブコマンドに（`--onnx-dir`、`single_file`/`case`/`.submitignore` 廃止）。`kaggle_api.py` / `history.py` / `auth.py` は流用。
 - **`backend/src/solvers/`（新規）— PoC**: `identity`（0 param / 0 MAC）+ `recolor`（1×1 conv の色置換）+ `run.py`（onnxruntime で全 example 完全一致を検証）。E2E テスト `test_e2e_poc.py` で「解く → 保存 → 検証 → submission.zip → 再読込」を通し確認。
@@ -68,7 +68,7 @@ PTCG ドメインを置き換える NeuroGolf 中核を実装済み。`dev/test-
 - タスク→ソルバの割当（どのタスクをどのソルバが解くか）と `data/output/onnx/taskNNN.onnx` 一括生成パイプライン。
 
 ### 3. cost 推定の精緻化
-- `onnxgolf.cost` は Conv/Gemm/MatMul の MAC + initializer/activation memory を概算。公式スコアラとの差異が出たら係数・対象 op を調整。
+- `onnxgolf.cost` は params + intermediate memory を概算する。MACs は寄与しない。公式スコアラとの差異が出たら、params 対象・memory 対象・dtype/shape 推定を調整。
 
 ---
 

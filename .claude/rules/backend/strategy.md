@@ -23,10 +23,21 @@ CLAUDE.md の goal と同格で、両者の手段指定（独自実装・1タス
 - 「LB が上がった」という結果は、手段指定（独自実装・1タスクずつ手動）の遵守と
   **すり替えてはならない**。goal は結果と手段の両方を要求する。
 
+## 対象優先度（score 式からの確定）
+
+- **正答が絶対条件**：`n_fail>0` / `unscorable` は 0 点。cost が安くても採用しない。
+- cost 削減候補は絶対 cost ではなく、期待相対削減率 `old_cost / new_cost` で優先する。
+  スコア改善は `ln(old_cost / new_cost)` なので、同じ 10% 削減なら cost 1000 でも
+  cost 10000 でも同じ点差。同じ 100 cost 削減なら小さい task の方が効率が高い。
+- 実務上の狙い目は、低 cost の単純 task や巨大 hard task を機械的に選ぶことではなく、
+  **中〜高 cost で、冗長な中間テンソル・dtype 境界・branch・initializer table を丸ごと消せる**
+  候補。絶対 cost は tie-breaker としてのみ使う。
+
 ## サイクル構造（固定・毎サイクル）
 
 1. **floor 全監査**：全400タスクを faithful 監査（`audit_one` run_correctness=True）し、
-   未解答（n_fail>0 / unscorable / 0点）・高コスト上位を特定。「狙い目リスト」を更新。
+   未解答（n_fail>0 / unscorable / 0点）と、`old_cost / new_cost` が大きく見込める
+   memory 支配タスクを特定。「狙い目リスト」を更新。
 2. **対象1タスクに独自 net を構築**（下記3手法のいずれか）。
 3. **faithful 検証**：train/test/arc-gen 全例で n_fail=0、かつ cost<floor。
 4. **submit → 実 LB 上昇で accept、退行は revert**。

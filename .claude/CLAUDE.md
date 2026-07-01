@@ -1,6 +1,6 @@
 # Kaggle NeuroGolf 2026
 
-Project for **The 2026 NeuroGolf Championship** on Kaggle (IJCAI-ECAI 2026 Competitions Track). The task is **"neural golf"**: design the *smallest* neural networks (exported to ONNX) that solve ARC-AGI grid-transformation tasks. A submission is a `submission.zip` containing at most one ONNX file per task (`task001.onnx` … `task400.onnx`). Scoring = **functional correctness** on ARC-AGI benchmarks (ARC-AGI-1 train + ARC-GEN-100K + a private suite) **plus minimizing parameter count / compute / memory**, estimated from the ONNX graph.
+Project for **The 2026 NeuroGolf Championship** on Kaggle (IJCAI-ECAI 2026 Competitions Track). The task is **"neural golf"**: design the *smallest* neural networks (exported to ONNX) that solve ARC-AGI grid-transformation tasks. A submission is a `submission.zip` containing at most one ONNX file per task (`task001.onnx` ... `task400.onnx`). Scoring = **functional correctness** on ARC-AGI benchmarks (ARC-AGI-1 train + ARC-GEN-100K + a private suite) **plus minimizing parameter count and memory footprint**, estimated from the ONNX graph.
 
 > ℹ️ **Migrated from a PTCG (Pokémon TCG battle-AI) scaffold.** The generic scaffolding (uv / ruff / mypy / pytest, `dev/*`, CI) is reused; PTCG-specific code (cabt engine, self-play, agent families, GPU/infra) was removed. The NeuroGolf core is **implemented**: ARC-AGI loader/encoding (`src/arc`), ONNX build/cost/constraints (`src/onnxgolf`), ONNX `submission.zip` packaging + validation (`src/submit`), and identity/recolor PoC solvers (`src/solvers`) — all green under `dev/test-bot`. Remaining work (real ARC data download, richer solvers) is tracked in [`docs/develop/MIGRATION.md`](../docs/develop/MIGRATION.md). Full competition spec: [`docs/competition/abstract.md`](../docs/competition/abstract.md).
 
@@ -11,7 +11,7 @@ NeuroGolf is an **offline "neural golf"** competition: for each ARC-AGI grid-tra
 - **Input** (per task): an ARC grid encoded as a tensor `[BATCH=1, CHANNELS=10, HEIGHT=30, WIDTH=30]` (10-color one-hot, grids 1×1–30×30, out-of-border cells zero-hot).
 - **Output**: the transformed grid in the same channel form (correct color channel = 1, others = 0; out-of-border = all 0).
 - **Correct** = every cell of every example pair (train / test / arc-gen) matches exactly.
-- **Score per task**: `max(1, 25 - ln(cost))`, where `cost = total parameters + total memory footprint + total MACs`. Solve exactly first, then shrink `cost`.
+- **Score per task**: `max(1, 25 - ln(max(1, cost)))`, where `cost = params + memory_bytes`. Solve exactly first, then shrink `cost`.
 
 ## Technology Stack
 
@@ -49,13 +49,15 @@ Submissions can be made up to 100 times a day without verification.
 | NeuroGolf | The 2026 NeuroGolf Championship — Kaggle / IJCAI-ECAI 2026 competition: solve ARC-AGI tasks with minimal ONNX networks |
 | ARC-AGI | Abstraction and Reasoning Corpus — grid-transformation puzzles. Tasks come from the ARC-AGI-1 public training subset |
 | ARC-GEN-100K | Procedurally generated ARC benchmark ([google/arc-gen](https://github.com/google/arc-gen)) used as an extra validation set per task |
-| cost | `total parameters + total memory footprint + total MACs` of a task's ONNX net; smaller = higher score |
-| task score | `max(1, 25 - ln(cost))`, awarded only when the net solves the task exactly |
+| cost | `params + memory_bytes` of a task's ONNX net; MACs do not contribute; smaller = higher score |
+| task score | `max(1, 25 - ln(max(1, cost)))`, awarded only when the net solves the task exactly |
 | grid encoding | `[1, 10, 30, 30]` tensor — 10-color one-hot, out-of-border cells all-zero |
 
 ## Scoring
 
-Per-task score is `max(1, 25 - ln(cost))` and is only earned when the network is **functionally correct** — every cell of every example pair (train / test / arc-gen, plus a private benchmark) matches the expected output exactly. Total score is the sum across solved tasks. The competition rewards solving exactly while minimizing `cost` ("golf").
+Per-task score is `max(1, 25 - ln(max(1, cost)))` and is only earned when the network is **functionally correct** — every cell of every example pair (train / test / arc-gen, plus a private benchmark) matches the expected output exactly. Total score is the sum across solved tasks. The competition rewards solving exactly while minimizing `cost` ("golf").
+
+Priority for cost work is based on expected point gain: `delta_points = ln(old_cost / new_cost)`. Do not rank tasks by absolute cost alone. After `n_fail=0`, prefer candidates with large relative reduction, especially medium-to-high cost graphs where a whole intermediate tensor, dtype boundary, branch, or table can be removed. Low-cost simple tasks and many high-cost hard tasks are often already near-optimal, so absolute size is only a tie-breaker.
 
 > ⚠️ **得点向上は独自実装を主軸とする。** harvest（公開ノートブックの取込）は per-task 最小値が
 > 上限であり、上位入賞には独自ネットが必須。harvest は補助手段に過ぎず、**harvest 単独サイクルは
