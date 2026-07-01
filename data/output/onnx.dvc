@@ -1,6 +1,6 @@
 outs:
-- md5: 85abdc45b0f68586c96b54737b9621ed.dir
-  size: 1944307
+- md5: bc6c1e1b4859baa1a625886caa9a1188.dir
+  size: 1944271
   nfiles: 400
   hash: md5
   path: onnx

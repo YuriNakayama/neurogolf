@@ -14,6 +14,7 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 030 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `2396 -> 2230` | `0.0718` | adopted case322 | Public Score improved `7183.72 -> 7183.79`. |
 | 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | adopted case323 | Public Score improved `7183.79 -> 7183.86`. |
 | 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | adopted case324 | Public Score improved `7183.86 -> 7183.91`; small exact candidates can move LB. |
+| 266 | dead `BitwiseXor(ch3, ch3) -> zero` node prune | `334 -> 319` | `0.0460` | adopted case338 | Public Score improved `7185.05 -> 7185.09`; low-risk unused node cleanup. |
 | 274 | broadcast-compress `zero_small` from `uint8[1,1,3,3]` to `uint8[1,1,1,1]` | `177 -> 169` | `0.0463` | adopted case333 | Public Score improved `7184.88 -> 7184.93`. |
 | 319 | `obj1_*` row/view alias bundle | `21723 -> 20519` | `0.0570` | adopted case334 | Public Score improved `7184.93 -> 7184.98`; do not mirror to `obj2_*`, which failed correctness. |
 | 209 | alias both uniform-branch MaxPool outputs: `max_s3 -> label_f`, `max_s4 -> label_f` | `29483 -> 28683` | `0.0275` | adopted case335 | Public Score improved `7184.98 -> 7185.01`; second-best case334 structural candidate adopted after task319. |
@@ -29,6 +30,12 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 213 | 5 `h_valid* -> h_valid_and01` aliases | `1887 -> 1882` | `0.0027` | exact micro | Post-case335 equivalence scan. |
 | 157 | 19 local equivalence aliases | `8163 -> 8143` | `0.0025` | exact micro | Exact but broad and small; keep as backlog material. |
 | 233 | compatible four-alias bundle: `whe118_strict_valid -> gre107`, `abs174 -> sub173`, `whe194 -> res193`, `whe198_strict_valid -> and182` | `51068 -> 50942` | `0.0025` | exact micro | `whe118_strict_valid -> gre107` and `whe159_strict_valid -> and142` are mutually incompatible together; either can be used in this bundle for same cost. |
+| 018 | compact 4-rewire bundle: `safe_name_578 -> safe_name_577`, `safe_name_1062 -> safe_name_1061`, `safe_name_589 -> safe_name_184`, `safe_name_586 -> safe_name_177` | `39583 -> 39299` | `0.0072` | exact micro | Best medium-risk compact scan candidate from case338; below standalone threshold, bank for batch. |
+| 117 | compact rewire: `condition_left -> col_local_i64` | `4158 -> 4149` | `0.0022` | exact micro | Stronger than the earlier one-byte task117 cleanup; single rewire into `Concat`. |
+| 096 | compact rewire: `length_updates -> length_u8` | `8823 -> 8818` | `0.0006` | exact micro | Single `Where` output rewire into `ScatterElements`; bank only. |
+| 328 | compact rewire: `subset_gt8_u8 -> br_active_u8` | `6904 -> 6902` | `0.0003` | exact micro | Prior task328 attempts were rejected/unscorable; keep as batch-only sensitive micro. |
+| 396 | compact rewire: `am1 -> A1f` | `8080 -> 8078` | `0.0002` | exact micro | Single `Sub` output rewire into `Equal`; tiny. |
+| 133 | 5 shape-bit rewires around `Mod`/`Where` intermediates | `33573 -> 33568` | `0.0001` | exact micro | Stronger than known task133 one-byte micros, but still tiny and shape-logic sensitive. |
 | 363 | broadcast-compress `kt1` from `(1,1,4,4)` to `(1,1,4,1)` | `4360 -> 4348` | `0.0028` | exact micro | Found by case334 parallel scan; below standalone threshold unless same-task bundle appears. |
 | 206 | broadcast-compress `p33` from `(2,)` to `(1,)` | `4184 -> 4183` | `0.0002` | exact micro | Found by case334 parallel scan; one-byte cleanup only. |
 | 334 | duplicate initializer cleanup: `probe_wzp -> probe_zp` | `131 -> 130` | `0.0077` | exact micro | Current post-case330 graph; best duplicate-initializer micro from case334 scan. |
