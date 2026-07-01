@@ -10,6 +10,10 @@ revisited when they can be bundled without breaking `n_fail=0`.
 |---|---|---:|---:|---|---|
 | 219 | residual alias bundle: `mul_174 -> gat_164`, `gat_468 -> gat_392`, `red_497 -> red_345`, `red_501 -> red_425`, `red_505 -> red_429`, `pad_521 -> pad_445`, `sli_540 -> gat_537__h16` | `17240 -> 15964` | `0.0770` | adopted case314 | Found by case313 explorer after `task158` was already submitted. Avoid late `Max` aliases that failed correctness. |
 | 174 | `mismatch_inside_43 -> mismatch_42` | `9326 -> 8978` | `0.0380` | adopted case315 | Found by case313 explorer after `task158` was already submitted. Rewired the `Cast` consumer and pruned the dynamic inside-mask chain. |
+| 271 | packed two live float16 channels, then one-hot `Conv` channel projection and final pad | `1187 -> 1090` | `0.0853` | adopted case321 | Same sparse-tail pattern as cases 318-320. Public Score improved `7183.64 -> 7183.72`. |
+| 030 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `2396 -> 2230` | `0.0718` | exact candidate | Temporary artifact: `/tmp/task030_packed_qlinearconv.onnx`. Next high-ratio packed-channel candidate after case321. |
+| 023 | packed live tail channels, then one-hot `QLinearConv` channel projection and final pad | `11992 -> 11222` | `0.0664` | exact candidate | Temporary artifact: `/tmp/task023_packed_qlinearconv.onnx`. Higher absolute cost but priority comes from relative reduction. |
+| 266 | packed live tail channels, then projection/pad replacement | `350 -> 334` | `0.0468` | exact candidate | Temporary artifact: `/tmp/task266_packed_tail.onnx`. Small absolute delta, but keep because small gains can accumulate. |
 | 158 | `mask_b_u8 -> nonbg_u8` | `33717 -> 32415` | `0.0399` | exact but not selected | Mutually exclusive with case313 `mask_a_u8 -> nonbg_u8`; applying both collapses pair channels and gives `n_fail=152`. Keep as an alternative if case313 is rejected. |
 | 023 | case3 surgery cleanup | `11992 -> 11982` | `0.0008` | exact micro | Params/index cleanup from case301; too small alone. |
 | 066 | case3 surgery cleanup | `16838 -> 16835` | `0.0002` | exact micro | Too small alone. |
