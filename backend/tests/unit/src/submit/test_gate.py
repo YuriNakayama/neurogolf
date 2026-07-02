@@ -78,7 +78,9 @@ def test_submit_candidate_when_exact_and_gain_clears_threshold(
     assert result.gain > 0.02
 
 
-def test_bank_low_gain_candidate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_bank_low_gain_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _patch_audits(monkeypatch, base_cost=1000, cand_cost=995)
     _patch_static_model(monkeypatch)
 
@@ -89,7 +91,9 @@ def test_bank_low_gain_candidate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert result.decision == "bank-low-gain"
 
 
-def test_mid_gain_requires_review(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mid_gain_requires_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _patch_audits(monkeypatch, base_cost=1000, cand_cost=985)
     _patch_static_model(monkeypatch)
 
@@ -272,7 +276,9 @@ def test_bundle_gate_accepts_explicit_micro_bundle(
     )
     _patch_static_model(monkeypatch)
 
-    blocked = gate.evaluate_bundle_gate([candidate1, candidate2], baseline_dir, task_dir)
+    blocked = gate.evaluate_bundle_gate(
+        [candidate1, candidate2], baseline_dir, task_dir
+    )
     allowed = gate.evaluate_bundle_gate(
         [candidate1, candidate2],
         baseline_dir,
