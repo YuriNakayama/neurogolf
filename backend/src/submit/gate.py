@@ -23,7 +23,10 @@ HARD_RISK_TASKS = {
     44: "case532 isolated task044 bottom-match alias regressed Public validation",
     101: "task101 local-equivalence aliases have regressed Public validation",
     135: "case541 unscorable-baseline crop replacement regressed Public validation",
-    192: "case544 task192 score-weight repair passed local but regressed Public validation",
+    192: (
+        "case544 task192 score-weight repair "
+        "passed local but regressed Public validation"
+    ),
     286: "broad task286 bitwise-chain equivalence bundle regressed Public validation",
     305: "task305 suffix-row prune was contaminated by a regressing filler bundle",
     366: "task366 broad alias bundle was contaminated by a regressing filler bundle",
