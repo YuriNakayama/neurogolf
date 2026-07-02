@@ -26,7 +26,11 @@ def _task_json(tmp_path: Path) -> Path:
 def _patch_static_model(
     monkeypatch: pytest.MonkeyPatch, *, functions: int = 0, forbidden: tuple[str, ...] = ()
 ) -> None:
-    monkeypatch.setattr(gate, "_functions_and_forbidden", lambda _p: (functions, forbidden))
+    monkeypatch.setattr(
+        gate,
+        "_model_static_risks",
+        lambda _p: (functions, forbidden, ("TopK",) if "TopK" in forbidden else ()),
+    )
 
 
 def _patch_audits(
@@ -106,6 +110,51 @@ def test_forbidden_op_blocks_candidate(
     )
 
     assert result.decision == "blocked-forbidden-op"
+
+
+def test_known_hidden_risk_blocks_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_audits(monkeypatch, base_cost=1000, cand_cost=900)
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_candidate_gate(
+        tmp_path / "baseline.onnx",
+        _onnx(tmp_path, "task017_prune.onnx"),
+        _task_json(tmp_path),
+    )
+
+    assert result.decision == "blocked-known-risk"
+
+
+def test_known_runtime_risk_requires_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_audits(monkeypatch, base_cost=1000, cand_cost=900)
+    monkeypatch.setattr(gate, "_model_static_risks", lambda _p: (0, (), ("TopK",)))
+
+    result = gate.evaluate_candidate_gate(
+        tmp_path / "baseline.onnx",
+        _onnx(tmp_path, "task285_topk.onnx"),
+        _task_json(tmp_path),
+    )
+
+    assert result.decision == "review-known-risk"
+
+
+def test_known_unchanged_micro_requires_review_above_threshold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_audits(monkeypatch, base_cost=1000, cand_cost=900)
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_candidate_gate(
+        tmp_path / "baseline.onnx",
+        _onnx(tmp_path, "task342_larger_repair.onnx"),
+        _task_json(tmp_path),
+    )
+
+    assert result.decision == "review-known-risk"
 
 
 def test_task_num_from_path_rejects_non_task_name(tmp_path: Path) -> None:

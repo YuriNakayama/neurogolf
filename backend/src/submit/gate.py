@@ -17,6 +17,30 @@ from evaluate import audit_one
 
 TASK_RE = re.compile(r"task(\d{3})")
 
+HARD_RISK_TASKS = {
+    17: "task017 candidate-row pruning regressed hidden/Public validation",
+    101: "task101 local-equivalence aliases have regressed Public validation",
+    286: "broad task286 bitwise-chain equivalence bundle regressed Public validation",
+    305: "task305 suffix-row prune was contaminated by a regressing filler bundle",
+    366: "task366 broad alias bundle was contaminated by a regressing filler bundle",
+}
+
+REVIEW_RISK_TASKS = {
+    90: "case414 unisolated micro bundle member",
+    209: "case414 unisolated micro bundle member",
+    293: "case414 unisolated micro bundle member",
+    308: "case414 unisolated micro bundle member",
+    338: "standalone micro did not move Public LB",
+    342: "standalone micro did not move Public LB",
+    370: "case414 unisolated micro bundle member",
+    392: "standalone micro did not move Public LB",
+}
+
+TOPK_RUNTIME_RISK_TASKS = {
+    233: "task233 uint8 TopK family produced Kaggle ERROR",
+    285: "task285 uint8 TopK family produced Kaggle ERROR",
+}
+
 
 @dataclass(frozen=True)
 class CandidateGate:
@@ -56,7 +80,7 @@ def _audit_clean(path: Path, examples: dict[str, Any]) -> dict[str, Any]:
             os.chdir(cwd)
 
 
-def _functions_and_forbidden(path: Path) -> tuple[int, tuple[str, ...]]:
+def _model_static_risks(path: Path) -> tuple[int, tuple[str, ...], tuple[str, ...]]:
     model = onnx.load(str(path))
     forbidden = {
         "Loop",
@@ -67,8 +91,19 @@ def _functions_and_forbidden(path: Path) -> tuple[int, tuple[str, ...]]:
         "Function",
         "Compress",
     }
-    found = sorted({node.op_type for node in model.graph.node} & forbidden)
-    return len(model.functions), tuple(found)
+    op_types = sorted({node.op_type for node in model.graph.node})
+    found = sorted(set(op_types) & forbidden)
+    return len(model.functions), tuple(found), tuple(op_types)
+
+
+def _known_risk_reason(task: int, op_types: tuple[str, ...]) -> tuple[str, str] | None:
+    if task in HARD_RISK_TASKS:
+        return "blocked-known-risk", HARD_RISK_TASKS[task]
+    if task in TOPK_RUNTIME_RISK_TASKS and "TopK" in op_types:
+        return "review-known-risk", TOPK_RUNTIME_RISK_TASKS[task]
+    if task in REVIEW_RISK_TASKS:
+        return "review-known-risk", REVIEW_RISK_TASKS[task]
+    return None
 
 
 def evaluate_candidate_gate(
@@ -85,7 +120,7 @@ def evaluate_candidate_gate(
     examples = json.loads(task_json.read_text())
     base = _audit_clean(baseline, examples)
     cand = _audit_clean(candidate, examples)
-    functions, forbidden_ops = _functions_and_forbidden(candidate)
+    functions, forbidden_ops, op_types = _model_static_risks(candidate)
 
     baseline_cost = base["cost"]
     candidate_cost = cand["cost"]
@@ -113,6 +148,9 @@ def evaluate_candidate_gate(
     elif int(candidate_cost) >= int(baseline_cost):
         decision = "blocked-no-gain"
         reason = f"candidate does not reduce cost: {baseline_cost}->{candidate_cost}"
+    elif known_risk := _known_risk_reason(task, op_types):
+        decision, known_reason = known_risk
+        reason = f"{known_reason}; requires a new isolated repair plan before submit"
     elif gain >= submit_gain:
         decision = "submit-candidate"
         reason = f"gain {gain:.6f} >= submit threshold {submit_gain:.6f}"
