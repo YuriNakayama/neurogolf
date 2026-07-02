@@ -95,6 +95,8 @@ revisited when they can be bundled without breaking `n_fail=0`.
 
 | task | candidate | local cost | est gain | status | notes |
 |---|---|---:|---:|---|---|
+| 066 | active-row/tie-score strengthened alias bundle | `16351 -> 16268` | `0.005089` | exact micro, banked case525 | Scratch: `/tmp/neurogolf_task066_targeted/active_hi__n_s_up_tie_score_TO_n_s_down_tie_score.onnx`. Supersedes weaker current `task066` banked aliases. Best nearby hidden-any cuts failed with `n_fail=129+`; keep this exact candidate for a future low-risk bundle. |
+| 161 | ReduceSum axes initializer to opset-12 attributes | `3657 -> 3651` | `0.001642` | exact micro, banked case525 | Scratch: `/private/tmp/neurogolf_task161_scratch/task161_base_opset12_reduceattrs.onnx`. High-gain ArgMax repair candidate `3657 -> 3548` still needs exact top-row tie-break behavior and remains `n_fail>0`; this small exact cleanup is safe bundle material only. |
 | 382 | alias combo: `h_s0 -> hsrc`, `h_s8 -> hsrc`, `v_s0 -> vsrc` | `5730 -> 5670` | `0.010526` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_t382_combo/task382_h_s0_TO_hsrc__h_s8_TO_hsrc__v_s0_TO_vsrc.onnx`. Low-medium alias; best case357 exact candidate but below standalone threshold. |
 | 173 | `p_nz -> v_nz` | `15721 -> 15702` | `0.001209` | exact micro, banked case357 | Scratch: `/tmp/neurogolf_case357_low_alias/task173_p_nz_TO_v_nz.onnx`. Low-risk single alias. |
 | 397 | `m4 -> three_new` | `2848 -> 2845` | `0.001054` | exact micro, case395 batch ERROR | Scratch: `/tmp/neurogolf_case357_low_alias/task397_m4_TO_three_new.onnx`. Locally exact, but included in both case390 and the no-`task046` case395 recovery batch that returned Kaggle `ERROR`; isolate before resubmitting. |
