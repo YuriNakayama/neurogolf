@@ -116,6 +116,21 @@ def submit_cmd(
         "--allow-review-gate",
         help="review-* 判定の変更も明示的に提出許可する",
     ),
+    allow_micro_bundle_gate: bool = typer.Option(
+        False,
+        "--allow-micro-bundle-gate",
+        help="exact bank-low-gain の低リスク束を合計 gain で明示的に提出許可する",
+    ),
+    micro_bundle_gain: float = typer.Option(
+        0.015,
+        "--micro-bundle-gain",
+        help="micro bundle gate を通す最小合計 relative gain",
+    ),
+    micro_bundle_max_tasks: int = typer.Option(
+        5,
+        "--micro-bundle-max-tasks",
+        help="micro bundle gate で許可する最大変更タスク数",
+    ),
     skip_pre_submit_gate: bool = typer.Option(
         False,
         "--skip-pre-submit-gate",
@@ -161,6 +176,9 @@ def submit_cmd(
             gate_baseline_dir,
             gate_task_dir,
             allow_review=allow_review_gate,
+            allow_micro_bundle=allow_micro_bundle_gate,
+            micro_bundle_gain=micro_bundle_gain,
+            micro_bundle_max_tasks=micro_bundle_max_tasks,
         )
         console.print(_bundle_gate_table(gate_result))
         console.print(
@@ -168,7 +186,7 @@ def submit_cmd(
             f"total gain: {gate_result.total_gain:.6f}  "
             f"decision: {gate_result.decision}"
         )
-        if gate_result.decision != "submit-bundle":
+        if gate_result.decision not in {"submit-bundle", "submit-micro-bundle"}:
             for blocked in gate_result.blocked:
                 console.print(
                     f"[red]blocked task{blocked.task:03d}: "

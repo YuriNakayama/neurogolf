@@ -233,6 +233,126 @@ def test_bundle_gate_blocks_low_gain_change(
     assert result.blocked[0].decision == "bank-low-gain"
 
 
+def test_bundle_gate_accepts_explicit_micro_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline1 = baseline_dir / "task001.onnx"
+    candidate1 = candidate_dir / "task001.onnx"
+    baseline2 = baseline_dir / "task002.onnx"
+    candidate2 = candidate_dir / "task002.onnx"
+    baseline1.write_bytes(b"old1")
+    candidate1.write_bytes(b"new1")
+    baseline2.write_bytes(b"old2")
+    candidate2.write_bytes(b"new2")
+    task_dir = _task_json_dir(tmp_path, 1, 2)
+    costs = {baseline1: 1000, baseline2: 1000, candidate1: 992, candidate2: 992}
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {"status": "ok", "cost": costs[path], "n_fail": 0},
+    )
+    _patch_static_model(monkeypatch)
+
+    blocked = gate.evaluate_bundle_gate([candidate1, candidate2], baseline_dir, task_dir)
+    allowed = gate.evaluate_bundle_gate(
+        [candidate1, candidate2],
+        baseline_dir,
+        task_dir,
+        allow_micro_bundle=True,
+        micro_bundle_gain=0.015,
+    )
+
+    assert blocked.decision == "blocked-bundle-gate"
+    assert allowed.decision == "submit-micro-bundle"
+    assert allowed.blocked == ()
+    assert allowed.total_gain > 0.015
+
+
+def test_micro_bundle_gate_keeps_review_risk_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline1 = baseline_dir / "task001.onnx"
+    candidate1 = candidate_dir / "task001.onnx"
+    baseline2 = baseline_dir / "task090.onnx"
+    candidate2 = candidate_dir / "task090.onnx"
+    baseline1.write_bytes(b"old1")
+    candidate1.write_bytes(b"new1")
+    baseline2.write_bytes(b"old2")
+    candidate2.write_bytes(b"new2")
+    task_dir = _task_json_dir(tmp_path, 1, 90)
+    costs = {baseline1: 1000, baseline2: 1000, candidate1: 992, candidate2: 900}
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {"status": "ok", "cost": costs[path], "n_fail": 0},
+    )
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_bundle_gate(
+        [candidate1, candidate2],
+        baseline_dir,
+        task_dir,
+        allow_micro_bundle=True,
+        micro_bundle_gain=0.015,
+    )
+
+    assert result.decision == "blocked-bundle-gate"
+    assert [blocked.decision for blocked in result.blocked] == [
+        "bank-low-gain",
+        "review-known-risk",
+    ]
+
+
+def test_micro_bundle_gate_respects_task_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    task_dir = _task_json_dir(tmp_path, 1, 2, 3)
+    candidates = []
+    costs = {}
+    for task in (1, 2, 3):
+        baseline = baseline_dir / f"task{task:03d}.onnx"
+        candidate = candidate_dir / f"task{task:03d}.onnx"
+        baseline.write_bytes(f"old{task}".encode())
+        candidate.write_bytes(f"new{task}".encode())
+        costs[baseline] = 1000
+        costs[candidate] = 992
+        candidates.append(candidate)
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {"status": "ok", "cost": costs[path], "n_fail": 0},
+    )
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_bundle_gate(
+        candidates,
+        baseline_dir,
+        task_dir,
+        allow_micro_bundle=True,
+        micro_bundle_gain=0.015,
+        micro_bundle_max_tasks=2,
+    )
+
+    assert result.decision == "blocked-bundle-gate"
+    assert [blocked.decision for blocked in result.blocked] == [
+        "bank-low-gain",
+        "bank-low-gain",
+        "bank-low-gain",
+    ]
+
+
 def test_bundle_gate_accepts_submit_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -79,6 +79,9 @@ class BundleGate:
 
     changed: tuple[CandidateGate, ...]
     allowed_review: bool
+    allowed_micro_bundle: bool = False
+    micro_bundle_gain: float = 0.015
+    micro_bundle_max_tasks: int = 5
 
     @property
     def accepted_decisions(self) -> tuple[str, ...]:
@@ -89,6 +92,8 @@ class BundleGate:
 
     @property
     def blocked(self) -> tuple[CandidateGate, ...]:
+        if self.is_micro_bundle:
+            return ()
         accepted = set(self.accepted_decisions)
         blocked = [gate for gate in self.changed if gate.decision not in accepted]
         review = [gate for gate in self.changed if gate.decision.startswith("review-")]
@@ -100,6 +105,8 @@ class BundleGate:
     def decision(self) -> str:
         if not self.changed:
             return "blocked-no-changes"
+        if self.is_micro_bundle:
+            return "submit-micro-bundle"
         if self.blocked:
             return "blocked-bundle-gate"
         return "submit-bundle"
@@ -107,6 +114,17 @@ class BundleGate:
     @property
     def total_gain(self) -> float:
         return sum(gate.gain or 0.0 for gate in self.changed)
+
+    @property
+    def is_micro_bundle(self) -> bool:
+        if not self.allowed_micro_bundle:
+            return False
+        if not self.changed or len(self.changed) > self.micro_bundle_max_tasks:
+            return False
+        decisions = {gate.decision for gate in self.changed}
+        if not decisions <= {"bank-low-gain", "submit-candidate"}:
+            return False
+        return self.total_gain >= self.micro_bundle_gain
 
 
 def task_num_from_path(path: Path) -> int:
@@ -252,6 +270,9 @@ def evaluate_bundle_gate(
     submit_gain: float = 0.020,
     mid_gain: float = 0.010,
     allow_review: bool = False,
+    allow_micro_bundle: bool = False,
+    micro_bundle_gain: float = 0.015,
+    micro_bundle_max_tasks: int = 5,
 ) -> BundleGate:
     """Gate every changed task in a candidate submission bundle."""
 
@@ -302,4 +323,10 @@ def evaluate_bundle_gate(
                 mid_gain=mid_gain,
             )
         )
-    return BundleGate(changed=tuple(results), allowed_review=allow_review)
+    return BundleGate(
+        changed=tuple(results),
+        allowed_review=allow_review,
+        allowed_micro_bundle=allow_micro_bundle,
+        micro_bundle_gain=micro_bundle_gain,
+        micro_bundle_max_tasks=micro_bundle_max_tasks,
+    )
