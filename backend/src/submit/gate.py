@@ -27,13 +27,18 @@ HARD_RISK_TASKS = {
 }
 
 REVIEW_RISK_TASKS = {
+    44: "case475 regressing micro bundle member",
+    46: "case475 regressing micro bundle member",
+    64: "case475 regressing micro bundle member",
     90: "case414 unisolated micro bundle member",
+    110: "case475 regressing micro bundle member",
     209: "case414 unisolated micro bundle member",
     293: "case414 unisolated micro bundle member",
     308: "case414 unisolated micro bundle member",
     338: "standalone micro did not move Public LB",
     342: "standalone micro did not move Public LB",
     370: "case414 unisolated micro bundle member",
+    378: "case475 regressing micro bundle member",
     392: "standalone micro did not move Public LB",
 }
 
