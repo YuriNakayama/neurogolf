@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,38 @@ class CandidateGate:
     reason: str
 
 
+@dataclass(frozen=True)
+class BundleGate:
+    """Decision for changed candidates in a submission bundle."""
+
+    changed: tuple[CandidateGate, ...]
+    allowed_review: bool
+
+    @property
+    def accepted_decisions(self) -> tuple[str, ...]:
+        decisions = ["submit-candidate"]
+        if self.allowed_review:
+            decisions.extend(["review-mid-gain", "review-known-risk"])
+        return tuple(decisions)
+
+    @property
+    def blocked(self) -> tuple[CandidateGate, ...]:
+        accepted = set(self.accepted_decisions)
+        return tuple(gate for gate in self.changed if gate.decision not in accepted)
+
+    @property
+    def decision(self) -> str:
+        if not self.changed:
+            return "blocked-no-changes"
+        if self.blocked:
+            return "blocked-bundle-gate"
+        return "submit-bundle"
+
+    @property
+    def total_gain(self) -> float:
+        return sum(gate.gain or 0.0 for gate in self.changed)
+
+
 def task_num_from_path(path: Path) -> int:
     """Extract the task number from a `taskNNN.onnx` path."""
 
@@ -65,6 +98,22 @@ def task_num_from_path(path: Path) -> int:
     if match is None:
         raise ValueError(f"ファイル名に taskNNN が含まれていません: {path.name}")
     return int(match.group(1))
+
+
+def _digest(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def changed_candidate_files(files: list[Path], baseline_dir: Path) -> list[Path]:
+    """Return candidate files whose bytes differ from the baseline task file."""
+
+    changed: list[Path] = []
+    for candidate in files:
+        task = task_num_from_path(candidate)
+        baseline = baseline_dir / f"task{task:03d}.onnx"
+        if not baseline.is_file() or _digest(candidate) != _digest(baseline):
+            changed.append(candidate)
+    return changed
 
 
 def _audit_clean(path: Path, examples: dict[str, Any]) -> dict[str, Any]:
@@ -173,3 +222,64 @@ def evaluate_candidate_gate(
         decision=decision,
         reason=reason,
     )
+
+
+def evaluate_bundle_gate(
+    files: list[Path],
+    baseline_dir: Path,
+    task_dir: Path,
+    *,
+    submit_gain: float = 0.020,
+    mid_gain: float = 0.010,
+    allow_review: bool = False,
+) -> BundleGate:
+    """Gate every changed task in a candidate submission bundle."""
+
+    changed = changed_candidate_files(files, baseline_dir)
+    results: list[CandidateGate] = []
+    for candidate in changed:
+        task = task_num_from_path(candidate)
+        baseline = baseline_dir / f"task{task:03d}.onnx"
+        task_json = task_dir / f"task{task:03d}.json"
+        if not baseline.is_file():
+            results.append(
+                CandidateGate(
+                    task=task,
+                    baseline_cost=None,
+                    candidate_cost=None,
+                    gain=None,
+                    n_fail=0,
+                    status="missing-baseline",
+                    functions=0,
+                    forbidden_ops=(),
+                    decision="blocked-missing-baseline",
+                    reason=f"baseline is missing: {baseline}",
+                )
+            )
+            continue
+        if not task_json.is_file():
+            results.append(
+                CandidateGate(
+                    task=task,
+                    baseline_cost=None,
+                    candidate_cost=None,
+                    gain=None,
+                    n_fail=0,
+                    status="missing-task-json",
+                    functions=0,
+                    forbidden_ops=(),
+                    decision="blocked-missing-task-json",
+                    reason=f"task json is missing: {task_json}",
+                )
+            )
+            continue
+        results.append(
+            evaluate_candidate_gate(
+                baseline,
+                candidate,
+                task_json,
+                submit_gain=submit_gain,
+                mid_gain=mid_gain,
+            )
+        )
+    return BundleGate(changed=tuple(results), allowed_review=allow_review)

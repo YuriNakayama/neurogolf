@@ -21,7 +21,12 @@ from submit import (
     record,
     validate_onnx_files,
 )
-from submit.gate import evaluate_candidate_gate, task_num_from_path
+from submit.gate import (
+    BundleGate,
+    evaluate_bundle_gate,
+    evaluate_candidate_gate,
+    task_num_from_path,
+)
 from submit.kaggle_api import KaggleCLIError
 from submit.validator import TaskValidation
 
@@ -50,6 +55,27 @@ def _validations_table(results: list[TaskValidation]) -> Table:
     return table
 
 
+def _bundle_gate_table(result: BundleGate) -> Table:
+    table = Table(title="Pre-submit gate")
+    table.add_column("task")
+    table.add_column("base", justify="right")
+    table.add_column("cand", justify="right")
+    table.add_column("gain", justify="right")
+    table.add_column("n_fail", justify="right")
+    table.add_column("decision")
+    for gate in result.changed:
+        gain = "—" if gate.gain is None else f"{gate.gain:.6f}"
+        table.add_row(
+            f"task{gate.task:03d}",
+            "—" if gate.baseline_cost is None else f"{gate.baseline_cost}",
+            "—" if gate.candidate_cost is None else f"{gate.candidate_cost}",
+            gain,
+            f"{gate.n_fail}",
+            gate.decision,
+        )
+    return table
+
+
 @app.command("submit")
 def submit_cmd(
     message: str = typer.Option(..., "-m", "--message", help="提出メッセージ"),
@@ -72,6 +98,28 @@ def submit_cmd(
         False,
         "--wait",
         help="提出後に validation 結果をポーリング",
+    ),
+    gate_baseline_dir: Path | None = typer.Option(
+        None,
+        "--gate-baseline-dir",
+        envvar="SUBMIT_GATE_BASELINE_DIR",
+        help="提出前ゲートで比較する採用済み baseline の ONNX ディレクトリ",
+    ),
+    gate_task_dir: Path = typer.Option(
+        Path("../data/lake/neurogolf-2026"),
+        "--gate-task-dir",
+        envvar="SUBMIT_GATE_TASK_DIR",
+        help="提出前ゲートで使う taskNNN.json ディレクトリ",
+    ),
+    allow_review_gate: bool = typer.Option(
+        False,
+        "--allow-review-gate",
+        help="review-* 判定の変更も明示的に提出許可する",
+    ),
+    skip_pre_submit_gate: bool = typer.Option(
+        False,
+        "--skip-pre-submit-gate",
+        help="提出前の差分 correctness/gain gate を明示的にスキップする",
     ),
 ) -> None:
     """ONNX 群を検証して submission.zip を作り Kaggle に提出する。"""
@@ -98,7 +146,37 @@ def submit_cmd(
         )
     console.print(summary)
 
-    console.print("\n[bold]2) submission.zip 生成[/]")
+    console.print("\n[bold]2) 差分 pre-submit gate[/]")
+    if skip_pre_submit_gate:
+        console.print("[yellow]pre-submit gate を明示スキップしました。[/]")
+    else:
+        if gate_baseline_dir is None:
+            console.print(
+                "[red]--gate-baseline-dir か SUBMIT_GATE_BASELINE_DIR が必要です。"
+                "無ゲート提出は --skip-pre-submit-gate を明示してください。[/]"
+            )
+            raise typer.Exit(code=2)
+        gate_result = evaluate_bundle_gate(
+            files,
+            gate_baseline_dir,
+            gate_task_dir,
+            allow_review=allow_review_gate,
+        )
+        console.print(_bundle_gate_table(gate_result))
+        console.print(
+            f"  changed: {len(gate_result.changed)}  "
+            f"total gain: {gate_result.total_gain:.6f}  "
+            f"decision: {gate_result.decision}"
+        )
+        if gate_result.decision != "submit-bundle":
+            for blocked in gate_result.blocked:
+                console.print(
+                    f"[red]blocked task{blocked.task:03d}: "
+                    f"{blocked.decision} - {blocked.reason}[/]"
+                )
+            raise typer.Exit(code=8)
+
+    console.print("\n[bold]3) submission.zip 生成[/]")
     archive = build_submission_zip(onnx_dir, output_dir, files=files)
     console.print(f"  生成: {archive}")
 
@@ -114,7 +192,7 @@ def submit_cmd(
         console.print("[green]dry-run 完了。提出は行いませんでした。[/]")
         raise typer.Exit(code=0)
 
-    console.print("\n[bold]3) 認証確認[/]")
+    console.print("\n[bold]4) 認証確認[/]")
     try:
         method = ensure_credentials()
     except AuthError as exc:
@@ -122,7 +200,7 @@ def submit_cmd(
         raise typer.Exit(code=4) from exc
     console.print(f"  認証方式: {method}")
 
-    console.print("\n[bold]4) Kaggle へ提出[/]")
+    console.print("\n[bold]5) Kaggle へ提出[/]")
     try:
         stdout = kaggle_submit(archive, message)
     except KaggleCLIError as exc:
@@ -140,7 +218,7 @@ def submit_cmd(
 
     result: dict[str, object] = {"stdout": stdout, "tasks": len(results)}
 
-    console.print("\n[bold]4b) 履歴APIで提出確認[/]")
+    console.print("\n[bold]5b) 履歴APIで提出確認[/]")
     confirmed = confirm_submission(message)
     if confirmed is None:
         console.print(
@@ -153,7 +231,7 @@ def submit_cmd(
         result["confirmed_row"] = confirmed
 
     if wait:
-        console.print("\n[bold]5) Validation ポーリング[/]")
+        console.print("\n[bold]6) Validation ポーリング[/]")
         outcome = poll(message)
         result["poll"] = outcome
         console.print(f"  結果: {outcome.get('status')}")

@@ -23,6 +23,14 @@ def _task_json(tmp_path: Path) -> Path:
     return path
 
 
+def _task_json_dir(tmp_path: Path, *tasks: int) -> Path:
+    task_dir = tmp_path / "tasks"
+    task_dir.mkdir()
+    for task in tasks:
+        (task_dir / f"task{task:03d}.json").write_text(json.dumps({"train": []}))
+    return task_dir
+
+
 def _patch_static_model(
     monkeypatch: pytest.MonkeyPatch, *, functions: int = 0, forbidden: tuple[str, ...] = ()
 ) -> None:
@@ -155,6 +163,131 @@ def test_known_unchanged_micro_requires_review_above_threshold(
     )
 
     assert result.decision == "review-known-risk"
+
+
+def test_changed_candidate_files_returns_only_byte_differences(tmp_path: Path) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    (baseline_dir / "task001.onnx").write_bytes(b"same")
+    (candidate_dir / "task001.onnx").write_bytes(b"same")
+    (baseline_dir / "task002.onnx").write_bytes(b"old")
+    changed = candidate_dir / "task002.onnx"
+    changed.write_bytes(b"new")
+
+    result = gate.changed_candidate_files(
+        [candidate_dir / "task001.onnx", changed], baseline_dir
+    )
+
+    assert result == [changed]
+
+
+def test_bundle_gate_blocks_low_gain_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline = baseline_dir / "task001.onnx"
+    candidate = candidate_dir / "task001.onnx"
+    baseline.write_bytes(b"old")
+    candidate.write_bytes(b"new")
+    task_dir = _task_json_dir(tmp_path, 1)
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {
+            "status": "ok",
+            "cost": 1000 if path == baseline else 995,
+            "n_fail": 0,
+        },
+    )
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_bundle_gate([candidate], baseline_dir, task_dir)
+
+    assert result.decision == "blocked-bundle-gate"
+    assert result.blocked[0].decision == "bank-low-gain"
+
+
+def test_bundle_gate_accepts_submit_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline = baseline_dir / "task001.onnx"
+    candidate = candidate_dir / "task001.onnx"
+    baseline.write_bytes(b"old")
+    candidate.write_bytes(b"new")
+    task_dir = _task_json_dir(tmp_path, 1)
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {
+            "status": "ok",
+            "cost": 1000 if path == baseline else 900,
+            "n_fail": 0,
+        },
+    )
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_bundle_gate([candidate], baseline_dir, task_dir)
+
+    assert result.decision == "submit-bundle"
+    assert result.blocked == ()
+    assert result.total_gain > 0.02
+
+
+def test_bundle_gate_review_requires_explicit_allow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline = baseline_dir / "task001.onnx"
+    candidate = candidate_dir / "task001.onnx"
+    baseline.write_bytes(b"old")
+    candidate.write_bytes(b"new")
+    task_dir = _task_json_dir(tmp_path, 1)
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {
+            "status": "ok",
+            "cost": 1000 if path == baseline else 985,
+            "n_fail": 0,
+        },
+    )
+    _patch_static_model(monkeypatch)
+
+    blocked = gate.evaluate_bundle_gate([candidate], baseline_dir, task_dir)
+    allowed = gate.evaluate_bundle_gate(
+        [candidate], baseline_dir, task_dir, allow_review=True
+    )
+
+    assert blocked.decision == "blocked-bundle-gate"
+    assert blocked.blocked[0].decision == "review-mid-gain"
+    assert allowed.decision == "submit-bundle"
+
+
+def test_bundle_gate_blocks_missing_baseline(tmp_path: Path) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    candidate = candidate_dir / "task001.onnx"
+    candidate.write_bytes(b"new")
+    task_dir = _task_json_dir(tmp_path, 1)
+
+    result = gate.evaluate_bundle_gate([candidate], baseline_dir, task_dir)
+
+    assert result.decision == "blocked-bundle-gate"
+    assert result.blocked[0].decision == "blocked-missing-baseline"
 
 
 def test_task_num_from_path_rejects_non_task_name(tmp_path: Path) -> None:

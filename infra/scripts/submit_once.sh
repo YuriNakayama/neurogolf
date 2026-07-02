@@ -18,6 +18,7 @@ readonly BACKEND_DIR="${REPO_DIR}/backend"
 # するため、backend から見ると ../data/output/onnx を指す必要がある（python
 # -m submit も find/fingerprint も backend cwd で動くため一貫してこの相対で解決）。
 readonly ONNX_DIR="${ONNX_DIR:-../data/output/onnx}"
+readonly SUBMIT_GATE_TASK_DIR="${SUBMIT_GATE_TASK_DIR:-../data/lake/neurogolf-2026}"
 # DVC は repo root に init 済み。pull 対象は root 相対パス。
 readonly DVC_TARGET="data/output/onnx"
 readonly FINGERPRINT_S3="s3://${LOG_BUCKET:-}/state/submit/last_fingerprint.txt"
@@ -85,6 +86,12 @@ main() {
   fi
   log_info "found ${onnx_count} onnx files"
 
+  if [[ -z "${SUBMIT_GATE_BASELINE_DIR:-}" ]]; then
+    log_error "SUBMIT_GATE_BASELINE_DIR missing; aborting ungated submit"
+    log_sync
+    exit 3
+  fi
+
   local fp last
   fp="$(compute_fingerprint)"
   last="$(load_last_fingerprint)"
@@ -97,7 +104,10 @@ main() {
   local msg
   msg="auto-submit $(date -u +%Y-%m-%dT%H:%M:%SZ) ${onnx_count}tasks"
   log_run "kaggle-submit" \
-    uv run python -m submit submit -m "${msg}" --onnx-dir "${ONNX_DIR}" --wait
+    uv run python -m submit submit -m "${msg}" --onnx-dir "${ONNX_DIR}" \
+      --gate-baseline-dir "${SUBMIT_GATE_BASELINE_DIR}" \
+      --gate-task-dir "${SUBMIT_GATE_TASK_DIR}" \
+      --wait
   local rc=$?
 
   if [[ ${rc} -eq 0 ]]; then
