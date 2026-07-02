@@ -42,6 +42,20 @@ TOPK_RUNTIME_RISK_TASKS = {
     285: "task285 uint8 TopK family produced Kaggle ERROR",
 }
 
+INDEX_RUNTIME_RISK_TASKS = {
+    131: "task131 ScatterND/Gather index dtype surgery failed local/runtime gates",
+    284: "task284 ScatterND index narrowing failed local/runtime gates",
+    371: "task371 ScatterND index narrowing failed local/runtime gates",
+}
+
+INDEX_RUNTIME_OPS = {
+    "Gather",
+    "GatherElements",
+    "GatherND",
+    "ScatterElements",
+    "ScatterND",
+}
+
 
 @dataclass(frozen=True)
 class CandidateGate:
@@ -76,7 +90,11 @@ class BundleGate:
     @property
     def blocked(self) -> tuple[CandidateGate, ...]:
         accepted = set(self.accepted_decisions)
-        return tuple(gate for gate in self.changed if gate.decision not in accepted)
+        blocked = [gate for gate in self.changed if gate.decision not in accepted]
+        review = [gate for gate in self.changed if gate.decision.startswith("review-")]
+        if self.allowed_review and len(review) > 1:
+            blocked.extend(review)
+        return tuple(blocked)
 
     @property
     def decision(self) -> str:
@@ -150,6 +168,8 @@ def _known_risk_reason(task: int, op_types: tuple[str, ...]) -> tuple[str, str] 
         return "blocked-known-risk", HARD_RISK_TASKS[task]
     if task in TOPK_RUNTIME_RISK_TASKS and "TopK" in op_types:
         return "review-known-risk", TOPK_RUNTIME_RISK_TASKS[task]
+    if task in INDEX_RUNTIME_RISK_TASKS and (set(op_types) & INDEX_RUNTIME_OPS):
+        return "review-known-risk", INDEX_RUNTIME_RISK_TASKS[task]
     if task in REVIEW_RISK_TASKS:
         return "review-known-risk", REVIEW_RISK_TASKS[task]
     return None

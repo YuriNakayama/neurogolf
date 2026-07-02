@@ -32,12 +32,18 @@ def _task_json_dir(tmp_path: Path, *tasks: int) -> Path:
 
 
 def _patch_static_model(
-    monkeypatch: pytest.MonkeyPatch, *, functions: int = 0, forbidden: tuple[str, ...] = ()
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    functions: int = 0,
+    forbidden: tuple[str, ...] = (),
+    op_types: tuple[str, ...] = (),
 ) -> None:
+    if not op_types:
+        op_types = ("TopK",) if "TopK" in forbidden else ()
     monkeypatch.setattr(
         gate,
         "_model_static_risks",
-        lambda _p: (functions, forbidden, ("TopK",) if "TopK" in forbidden else ()),
+        lambda _p: (functions, forbidden, op_types),
     )
 
 
@@ -144,6 +150,21 @@ def test_known_runtime_risk_requires_review(
     result = gate.evaluate_candidate_gate(
         tmp_path / "baseline.onnx",
         _onnx(tmp_path, "task285_topk.onnx"),
+        _task_json(tmp_path),
+    )
+
+    assert result.decision == "review-known-risk"
+
+
+def test_index_runtime_risk_requires_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_audits(monkeypatch, base_cost=1000, cand_cost=900)
+    _patch_static_model(monkeypatch, op_types=("ScatterND",))
+
+    result = gate.evaluate_candidate_gate(
+        tmp_path / "baseline.onnx",
+        _onnx(tmp_path, "task284_index_i32.onnx"),
         _task_json(tmp_path),
     )
 
@@ -273,6 +294,44 @@ def test_bundle_gate_review_requires_explicit_allow(
     assert blocked.decision == "blocked-bundle-gate"
     assert blocked.blocked[0].decision == "review-mid-gain"
     assert allowed.decision == "submit-bundle"
+
+
+def test_bundle_gate_allows_only_one_review_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    baseline1 = baseline_dir / "task001.onnx"
+    candidate1 = candidate_dir / "task001.onnx"
+    baseline2 = baseline_dir / "task002.onnx"
+    candidate2 = candidate_dir / "task002.onnx"
+    baseline1.write_bytes(b"old1")
+    candidate1.write_bytes(b"new1")
+    baseline2.write_bytes(b"old2")
+    candidate2.write_bytes(b"new2")
+    task_dir = _task_json_dir(tmp_path, 1, 2)
+    monkeypatch.setattr(
+        gate,
+        "_audit_clean",
+        lambda path, _examples: {
+            "status": "ok",
+            "cost": 1000 if path in {baseline1, baseline2} else 985,
+            "n_fail": 0,
+        },
+    )
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_bundle_gate(
+        [candidate1, candidate2], baseline_dir, task_dir, allow_review=True
+    )
+
+    assert result.decision == "blocked-bundle-gate"
+    assert [blocked.decision for blocked in result.blocked] == [
+        "review-mid-gain",
+        "review-mid-gain",
+    ]
 
 
 def test_bundle_gate_blocks_missing_baseline(tmp_path: Path) -> None:
