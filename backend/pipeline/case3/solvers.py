@@ -14,7 +14,11 @@ import onnx
 
 from . import builders as B
 from .arc import NUM_COLORS, Example, Task, grid_shape
-from .floodfill import build_border_bicolor_flood, build_floodfill_8conn
+from .floodfill import (
+    build_4conn_oob_safe_flood,
+    build_border_bicolor_flood,
+    build_floodfill_8conn,
+)
 from .lookup import _build_table
 from .panels import build_panels
 from .residual import build_residual
@@ -314,6 +318,10 @@ def solve_floodfill(task: Task) -> onnx.ModelProto | None:
     return build_floodfill_8conn(task.valid_examples())
 
 
+def solve_4conn_oob_safe_flood(task: Task) -> onnx.ModelProto | None:
+    return build_4conn_oob_safe_flood(task.valid_examples())
+
+
 def solve_border_bicolor_flood(task: Task) -> onnx.ModelProto | None:
     return build_border_bicolor_flood(task.valid_examples())
 
@@ -342,5 +350,6 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("small_lookup", solve_small_lookup),
     ("scale_up_2d", solve_scale_up_2d),
     ("floodfill", solve_floodfill),
+    ("4conn_oob_safe_flood", solve_4conn_oob_safe_flood),
     ("border_bicolor_flood", solve_border_bicolor_flood),
 ]

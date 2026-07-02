@@ -564,3 +564,176 @@ def build_border_bicolor_flood(
     return helper.make_model(
         graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
     )
+
+
+# ---------------------------------------------------------------------------
+# 4 連結 OOB-safe flood-fill (build_floodfill_8conn の OOB 修正版)
+# ---------------------------------------------------------------------------
+
+
+def _min_4conn_steps(examples: tuple[Example, ...]) -> int:
+    """外周から 4 連結 BFS で border-reachable 自由セル全体に到達するのに必要な最小ステップ数。"""
+    max_depth = 0
+    for e in examples:
+        a = np.array(e.input, dtype=np.int64)
+        h, w = a.shape
+        free = a == 0
+        dist: np.ndarray = np.full((h, w), -1, dtype=np.int64)
+        dq: deque[tuple[int, int]] = deque()
+        for r in range(h):
+            for c in range(w):
+                if free[r, c] and (r == 0 or r == h - 1 or c == 0 or c == w - 1):
+                    dist[r, c] = 0
+                    dq.append((r, c))
+        while dq:
+            r, c = dq.popleft()
+            for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < h and 0 <= nc < w and free[nr, nc] and dist[nr, nc] == -1:
+                    dist[nr, nc] = dist[r, c] + 1
+                    dq.append((nr, nc))
+        reachable = dist[dist >= 0]
+        if reachable.size > 0:
+            max_depth = max(max_depth, int(reachable.max()))
+    return max_depth
+
+
+def build_4conn_oob_safe_flood(
+    examples: tuple[Example, ...], n_steps: int | None = None
+) -> onnx.ModelProto | None:
+    """4 連結 OOB-safe border flood-fill ONNX を構築。解けなければ None。
+
+    build_floodfill_8conn の OOB 修正版:
+    - free_u8 = ch0 (bg color のみ; OOB セルは free でない)
+    - border seed = Pad(not_grid, val=1) + MaxPool(3×3) で OOB 隣接 free セルを抽出
+    - BFS = 4 連結 (MaxPool[3,1]+[1,3] の並列 Max, Min free_u8)
+    """
+    det = _detect(examples)
+    if det is None:
+        return None
+    _, fill = det
+    line = _find_line_color(examples, fill)
+    if line is None or line == fill:
+        return None
+
+    m = _max_dim(examples)
+    if m < 3:
+        return None
+
+    steps = n_steps if n_steps is not None else _min_4conn_steps(examples)
+
+    nodes: list[onnx.NodeProto] = []
+    inits: list[onnx.TensorProto] = []
+
+    # Shared Slice axes + indices for ch0 and ch_line
+    inits += [
+        helper.make_tensor("ax", _I64, [3], [1, 2, 3]),
+        helper.make_tensor("s0", _I64, [3], [0, 0, 0]),
+        helper.make_tensor("e0", _I64, [3], [1, m, m]),
+        helper.make_tensor("sL", _I64, [3], [line, 0, 0]),
+        helper.make_tensor("eL", _I64, [3], [line + 1, m, m]),
+        helper.make_tensor("one_u8", _U8, [], [1]),
+    ]
+
+    # Extract ch0 (bg) and ch_line (wall) in [1,1,m,m]
+    nodes.append(helper.make_node("Slice", ["input", "s0", "e0", "ax"], ["free_f"]))
+    nodes.append(helper.make_node("Slice", ["input", "sL", "eL", "ax"], ["wall_f"]))
+    nodes.append(helper.make_node("Cast", ["free_f"], ["free_u8"], to=_U8))
+    nodes.append(helper.make_node("Cast", ["wall_f"], ["wall_u8"], to=_U8))
+
+    # OOB detection: not_grid = 1 - max(free_u8, wall_u8) = 1 for OOB, 0 for in-grid
+    nodes.append(helper.make_node("Max", ["free_u8", "wall_u8"], ["fow"]))
+    nodes.append(helper.make_node("Sub", ["one_u8", "fow"], ["not_grid"]))
+
+    # Border seed: Pad(not_grid, val=1) + MaxPool(3×3, pads=0) → OOB-adjacent cells
+    # Pad adds outer ring of 1s (virtual OOB boundary); 3×3 MaxPool dilates in 8-conn
+    # which equals 4-conn for rectangular OOB regions.
+    inits.append(helper.make_tensor("oob_pad_cfg", _I64, [8], [0, 0, 1, 1, 0, 0, 1, 1]))
+    nodes.append(
+        helper.make_node(
+            "Pad",
+            ["not_grid", "oob_pad_cfg", "one_u8"],
+            ["not_grid_pad"],
+            mode="constant",
+        )
+    )
+    nodes.append(
+        helper.make_node(
+            "MaxPool",
+            ["not_grid_pad"],
+            ["oob_dil"],
+            kernel_shape=[3, 3],
+            pads=[0, 0, 0, 0],
+            strides=[1, 1],
+        )
+    )
+    nodes.append(helper.make_node("Min", ["oob_dil", "free_u8"], ["reach_0"]))
+
+    # 4-conn BFS: parallel MaxPool(3×1) + MaxPool(1×3) → Max → Min(free_u8)
+    cur = "reach_0"
+    for k in range(steps):
+        v, h_name, dil, nxt = f"v{k}", f"h{k}", f"dil{k}", f"reach_{k + 1}"
+        nodes.append(
+            helper.make_node(
+                "MaxPool",
+                [cur],
+                [v],
+                kernel_shape=[3, 1],
+                pads=[1, 0, 1, 0],
+                strides=[1, 1],
+            )
+        )
+        nodes.append(
+            helper.make_node(
+                "MaxPool",
+                [cur],
+                [h_name],
+                kernel_shape=[1, 3],
+                pads=[0, 1, 0, 1],
+                strides=[1, 1],
+            )
+        )
+        nodes.append(helper.make_node("Max", [v, h_name], [dil]))
+        nodes.append(helper.make_node("Min", [dil, "free_u8"], [nxt]))
+        cur = nxt
+
+    # enclosed = free_u8 - reach (UINT8: reach ⊆ free → no underflow)
+    nodes.append(helper.make_node("Sub", ["free_u8", cur], ["enc_u8"]))
+
+    # Output channel assembly: 0=border-reachable bg, line=wall, fill=enclosed
+    max_ch = max(line, fill)
+    need_z0 = any(k != 0 and k != fill and k != line for k in range(1, max_ch + 1))
+    if need_z0:
+        nodes.append(helper.make_node("Sub", ["free_u8", "free_u8"], ["z0"]))
+
+    concat_inputs: list[str] = []
+    for k in range(max_ch + 1):
+        if k == 0:
+            concat_inputs.append(cur)
+        elif k == fill:
+            concat_inputs.append("enc_u8")
+        elif k == line:
+            concat_inputs.append("wall_u8")
+        else:
+            concat_inputs.append("z0")
+
+    n_concat = max_ch + 1
+    nodes.append(helper.make_node("Concat", concat_inputs, ["small"], axis=1))
+
+    pad_cfg = [0, 0, 0, 0, 0, NUM_COLORS - n_concat, GRID - m, GRID - m]
+    inits += [
+        helper.make_tensor("padcfg", _I64, [8], pad_cfg),
+        helper.make_tensor("zero_u8", _U8, [], [0]),
+    ]
+    nodes.append(
+        helper.make_node(
+            "Pad", ["small", "padcfg", "zero_u8"], ["output"], mode="constant"
+        )
+    )
+
+    x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)
+    y = helper.make_tensor_value_info("output", _U8, GRID_SHAPE)
+    graph = helper.make_graph(nodes, "floodfill4_oob", [x], [y], inits)
+    return helper.make_model(
+        graph, ir_version=10, opset_imports=[helper.make_opsetid("", 18)]
+    )
