@@ -35,6 +35,7 @@ REVIEW_RISK_TASKS = {
     64: "case475 regressing micro bundle member",
     90: "case414 unisolated micro bundle member",
     110: "case475 regressing micro bundle member",
+    175: "case509 guarded task175 index repair regressed Public validation",
     209: "case414 unisolated micro bundle member",
     293: "case414 unisolated micro bundle member",
     308: "case414 unisolated micro bundle member",
