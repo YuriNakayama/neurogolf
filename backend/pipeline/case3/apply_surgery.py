@@ -26,7 +26,7 @@ import onnx
 
 from evaluate.scorer import audit_one
 
-from .surgery import PASSES, _load_task_json
+from .surgery import PASSES, _load_task_json, equivalence_alias_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,23 @@ def surgeon_task(
     cur_model = onnx.load(str(src_onnx))
     improved = False
     tmp = work_dir / src_onnx.name
+
+    if examples is not None:
+        try:
+            cand = equivalence_alias_runtime(cur_model, examples)
+            onnx.checker.check_model(cand)
+            onnx.save(cand, str(tmp))
+            scored = _cost(tmp, examples)
+            if scored is not None and scored[1] < cur_cost:
+                cur_model, cur_points, cur_cost = cand, scored[0], scored[1]
+                improved = True
+                logger.debug(
+                    "%s: equivalence_alias accepted -> cost %d", src_onnx.name, cur_cost
+                )
+        except Exception as e:
+            logger.debug(
+                "%s: equivalence_alias_runtime failed: %s", src_onnx.name, str(e)[:80]
+            )
 
     for name, fn in PASSES:
         try:
