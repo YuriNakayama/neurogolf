@@ -205,3 +205,16 @@ revisited when they can be bundled without breaking `n_fail=0`.
 | 301 | one-byte Pad offset cleanup | `1141 -> 1140` | `0.000877` | exact micro, banked case509 parallel | Scratch: `/private/tmp/neurogolf_case410_alias_scan_200_400/task301_9_Pad_in2_offset100_u8.onnx`. Clean current-baseline filler only. |
 | 219 | dtype shrink `cast41` to uint8/int8 | `14838 -> 14823` | `0.001011` | exact micro, banked case509 parallel | Scratch: `/tmp/neurogolf_parallel_AA/dtype_candidates/task219_cast41_to2.onnx` or `task219_cast41_to3.onnx`. Current-baseline exact; bank for a reviewed bundle. |
 | 173 | secondary dtype shrink variants `cast63`/`cast50` | `15664 -> 15638` / `15642` | `0.001661` / `0.001405` | exact micro, banked case509 parallel | Scratch options under `/tmp/neurogolf_parallel_AA/dtype_candidates/`. Do not combine with the case510 `cast10` submit candidate without a fresh same-task re-gate. |
+
+## 20260703
+
+| task | candidate | local cost | est gain | status | notes |
+|---|---|---:|---:|---|---|
+| 117 | duplicate initializer / `onnxsim` mechanical cleanup | `4148 -> 4145` | `0.000724` | exact micro, banked case535 | Scratch: `/private/tmp/neurogolf_agent_mech_B/task117_dup_init/task117.onnx` or `/private/tmp/neurogolf_case535_onnxsim_scan/task117_sim.onnx`. Current-baseline exact, non-risk, but too small for standalone submit. |
+| 206 | `onnxsim` mechanical cleanup | `4183 -> 4182` | `0.000239` | exact micro, re-banked case535 | Scratch: `/private/tmp/neurogolf_agent_mech_C/task206_onnxsim.onnx` or `/private/tmp/neurogolf_case535_onnxsim_scan/task206_sim.onnx`. Current-baseline exact, non-risk, supersedes same one-byte cleanup path only by current proof. |
+| 234 | `onnxsim` mechanical cleanup on current graph | `6845 -> 6841` | `0.000585` | exact micro, re-banked case535 | Scratch: `/private/tmp/neurogolf_agent_mech_C/task234_onnxsim.onnx` or `/private/tmp/neurogolf_case535_onnxsim_scan/task234_sim.onnx`. Current-baseline exact, non-risk. |
+| 328 | case533 exact cleanup candidate | `6904 -> 6902` | `0.000290` | exact micro, re-banked case535 | Scratch: `/private/tmp/neurogolf_case533_candidate_onnx/task328.onnx`. Current-baseline exact, non-risk, but prior path stability concerns mean re-gate before use. |
+| 005 | case533 exact cleanup candidate | `6882 -> 6881` | `0.000145` | exact micro, re-banked case535 | Scratch: `/private/tmp/neurogolf_case533_candidate_onnx/task005.onnx`. Current-baseline exact, non-risk. |
+| 066 | `onnxslim` cleanup on current graph | `16268 -> 16248` | `0.001230` | exact micro, review-risk bank only | Scratch: `/private/tmp/neurogolf_agent_mech_A/candidates/task066_onnxslim_16268_to_16248.onnx`. Current-baseline exact, but `task066` remains review-risk; do not include in cadence micro bundles. |
+| 023 | high-gain producer repair target | `11212 -> 9844` | `~0.130` | near miss, `n_fail=2` | Semantic worker found this is still worth a future repair cycle, but prior single-consumer variants stayed at `n_fail=2`; needs failure-diff repair, not blind alias scanning. |
+| 279 | high-gain flood-extension repair target | `4827 -> 4315` | `0.112128` | near miss, `n_fail=2` | Prior repairs became exact only by restoring cost above baseline; revisit only with a cheaper flood-extension mechanism. |
