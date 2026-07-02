@@ -781,6 +781,154 @@ def fp16_surgery(model: onnx.ModelProto) -> onnx.ModelProto:
     return m
 
 
+# --- runtime equivalence alias -----------------------------------------------
+
+
+def _grid_to_input(grid: list[list[int]]) -> np.ndarray:
+    arr = np.zeros((1, 10, 30, 30), dtype=np.float32)
+    for r, row in enumerate(grid):
+        for c, color in enumerate(row):
+            if 0 <= color < 10:
+                arr[0, color, r, c] = 1.0
+    return arr
+
+
+def equivalence_alias_runtime(
+    model: onnx.ModelProto,
+    examples: dict[str, Any],
+    n_ex: int = 20,
+) -> onnx.ModelProto:
+    """実行時等値テンソルをエイリアス化して memory cost を削減。
+
+    全中間テンソルを n_ex 例で実行して収集し、Union-Find で同値クラスタを構築する。
+    各クラスタの canonical 以外の参照を canonical で書き換え、dead node を除去する。
+    """
+    import onnxruntime as ort
+
+    m = onnx.shape_inference.infer_shapes(copy.deepcopy(model))
+    graph = m.graph
+
+    init_names: set[str] = {i.name for i in graph.initializer}
+    out_names: set[str] = {o.name for o in graph.output}
+
+    probe_names = [
+        vi.name
+        for vi in graph.value_info
+        if vi.name not in out_names and vi.name not in init_names
+    ]
+    if not probe_names:
+        return model
+
+    m_ext = copy.deepcopy(m)
+    vi_map = {vi.name: vi for vi in m.graph.value_info}
+    for name in probe_names:
+        if name in vi_map:
+            m_ext.graph.output.append(copy.deepcopy(vi_map[name]))
+
+    try:
+        opts = ort.SessionOptions()
+        opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(m_ext.SerializeToString(), opts)
+    except Exception:
+        return model
+
+    out_name_list = [o.name for o in sess.get_outputs()]
+    collected: dict[str, list[np.ndarray]] = defaultdict(list)
+    count = 0
+    for split in ("train", "test"):
+        for ex in examples.get(split, []):
+            grid = ex.get("input", [])
+            if not grid or max(len(grid), len(grid[0])) > 30:
+                continue
+            inp = _grid_to_input(grid)
+            try:
+                outs = sess.run(None, {"input": inp})
+            except Exception:
+                continue
+            for name, arr in zip(out_name_list, outs, strict=True):
+                collected[name].append(arr)
+            count += 1
+            if count >= n_ex:
+                break
+        if count >= n_ex:
+            break
+
+    if count == 0:
+        return model
+
+    full = [n for n in probe_names if len(collected.get(n, [])) == count]
+    if not full:
+        return model
+
+    # Union-Find: canonical = smallest index (earlier in graph order)
+    parent = list(range(len(full)))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(a: int, b: int) -> None:
+        pa, pb = _find(a), _find(b)
+        if pa != pb:
+            if pa < pb:
+                parent[pb] = pa
+            else:
+                parent[pa] = pb
+
+    for i in range(len(full)):
+        arrs_i = collected[full[i]]
+        for j in range(i + 1, len(full)):
+            arrs_j = collected[full[j]]
+            if arrs_i[0].shape != arrs_j[0].shape:
+                continue
+            if arrs_i[0].dtype != arrs_j[0].dtype:
+                continue
+            if all(np.array_equal(a, b) for a, b in zip(arrs_i, arrs_j, strict=True)):
+                _union(i, j)
+
+    rewire: dict[str, str] = {
+        full[j]: full[_find(j)] for j in range(len(full)) if _find(j) != j
+    }
+    if not rewire:
+        return model
+
+    def _resolve(name: str) -> str:
+        seen: set[str] = set()
+        while name in rewire and name not in seen:
+            seen.add(name)
+            name = rewire[name]
+        return name
+
+    orig = copy.deepcopy(model)
+    g = orig.graph
+    for node in g.node:
+        for k, inp in enumerate(node.input):
+            if inp in rewire:
+                node.input[k] = _resolve(inp)
+
+    # Dead node elimination (iterative, reverse topological)
+    changed = True
+    while changed:
+        needed: set[str] = {o.name for o in g.output}
+        alive: list[onnx.NodeProto] = []
+        changed = False
+        for node in reversed(list(g.node)):
+            if any(o in needed for o in node.output if o):
+                alive.append(node)
+                needed.update(inp for inp in node.input if inp)
+            else:
+                changed = True
+        if changed:
+            del g.node[:]
+            g.node.extend(reversed(alive))
+
+    _prune_unused_initializers(g)
+    del g.value_info[:]
+    return orig
+
+
 # --- driver -------------------------------------------------------------------
 
 Pass = Callable[[onnx.ModelProto], onnx.ModelProto]
