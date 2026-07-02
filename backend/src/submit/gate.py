@@ -20,6 +20,7 @@ TASK_RE = re.compile(r"task(\d{3})")
 
 HARD_RISK_TASKS = {
     17: "task017 candidate-row pruning regressed hidden/Public validation",
+    44: "case532 isolated task044 bottom-match alias regressed Public validation",
     101: "task101 local-equivalence aliases have regressed Public validation",
     286: "broad task286 bitwise-chain equivalence bundle regressed Public validation",
     305: "task305 suffix-row prune was contaminated by a regressing filler bundle",
@@ -31,7 +32,6 @@ REVIEW_RISK_TASKS = {
     18: "case514 clean micro-bundle member produced Kaggle ERROR",
     35: "case395 batch-ERROR family member",
     37: "case395 batch-ERROR family member",
-    44: "case475 regressing micro bundle member",
     46: "case475 regressing micro bundle member",
     64: "case475 regressing micro bundle member",
     90: "case414 unisolated micro bundle member",

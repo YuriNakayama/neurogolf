@@ -261,13 +261,13 @@ def test_bundle_gate_accepts_explicit_micro_bundle(
     candidate_dir.mkdir()
     baseline1 = baseline_dir / "task001.onnx"
     candidate1 = candidate_dir / "task001.onnx"
-    baseline2 = baseline_dir / "task002.onnx"
-    candidate2 = candidate_dir / "task002.onnx"
+    baseline2 = baseline_dir / "task003.onnx"
+    candidate2 = candidate_dir / "task003.onnx"
     baseline1.write_bytes(b"old1")
     candidate1.write_bytes(b"new1")
     baseline2.write_bytes(b"old2")
     candidate2.write_bytes(b"new2")
-    task_dir = _task_json_dir(tmp_path, 1, 2)
+    task_dir = _task_json_dir(tmp_path, 1, 3)
     costs = {baseline1: 1000, baseline2: 1000, candidate1: 992, candidate2: 992}
     monkeypatch.setattr(
         gate,
@@ -339,10 +339,10 @@ def test_micro_bundle_gate_respects_task_limit(
     candidate_dir = tmp_path / "candidate"
     baseline_dir.mkdir()
     candidate_dir.mkdir()
-    task_dir = _task_json_dir(tmp_path, 1, 2, 3)
+    task_dir = _task_json_dir(tmp_path, 1, 3, 4)
     candidates = []
     costs = {}
-    for task in (1, 2, 3):
+    for task in (1, 3, 4):
         baseline = baseline_dir / f"task{task:03d}.onnx"
         candidate = candidate_dir / f"task{task:03d}.onnx"
         baseline.write_bytes(f"old{task}".encode())
@@ -446,13 +446,13 @@ def test_bundle_gate_allows_only_one_review_change(
     candidate_dir.mkdir()
     baseline1 = baseline_dir / "task001.onnx"
     candidate1 = candidate_dir / "task001.onnx"
-    baseline2 = baseline_dir / "task002.onnx"
-    candidate2 = candidate_dir / "task002.onnx"
+    baseline2 = baseline_dir / "task003.onnx"
+    candidate2 = candidate_dir / "task003.onnx"
     baseline1.write_bytes(b"old1")
     candidate1.write_bytes(b"new1")
     baseline2.write_bytes(b"old2")
     candidate2.write_bytes(b"new2")
-    task_dir = _task_json_dir(tmp_path, 1, 2)
+    task_dir = _task_json_dir(tmp_path, 1, 3)
     monkeypatch.setattr(
         gate,
         "_audit_clean",
