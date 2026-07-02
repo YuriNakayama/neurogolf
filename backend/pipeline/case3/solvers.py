@@ -224,6 +224,91 @@ def solve_scale_up_2d(task: Task) -> onnx.ModelProto | None:
     return B.build_scale_up_2d(h, w, k)
 
 
+# --- tile (cyclic np.tile) ---------------------------------------------------
+
+
+def _tile_reps(task: Task, *, axis: int) -> int | None:
+    """axis 方向の整数タイル反復数 reps>=2 を検出。reps*dim_in<=GRID_MAX を要求。"""
+    dim_in = _const_dim(task, axis=axis)
+    dim_out = _out_dim(task, axis=axis)
+    if dim_in is None or dim_out is None or dim_out <= dim_in or dim_out % dim_in != 0:
+        return None
+    reps = dim_out // dim_in
+    if reps < 2 or reps * dim_in > GRID_MAX:
+        return None
+    return reps
+
+
+def _is_tile_rows(e: Example, h: int, reps: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape[0] != h or out.shape != (reps * h, inp.shape[1]):
+        return False
+    return bool(np.array_equal(out, np.tile(inp, (reps, 1))))
+
+
+def _is_tile_cols(e: Example, w: int, reps: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape[1] != w or out.shape != (inp.shape[0], reps * w):
+        return False
+    return bool(np.array_equal(out, np.tile(inp, (1, reps))))
+
+
+def _is_tile_2d(e: Example, h: int, w: int, reps_h: int, reps_w: int) -> bool:
+    inp, out = _np(e.input), _np(e.output)
+    if inp.shape != (h, w) or out.shape != (reps_h * h, reps_w * w):
+        return False
+    return bool(np.array_equal(out, np.tile(inp, (reps_h, reps_w))))
+
+
+def solve_tile_rows(task: Task) -> onnx.ModelProto | None:
+    """行方向 reps 回循環タイル（np.tile axis=0）。cost=30。"""
+    reps = _tile_reps(task, axis=0)
+    if reps is None:
+        return None
+    h = _const_dim(task, axis=0)
+    if h is None:
+        return None
+    w_in = _const_dim(task, axis=1)
+    w_out = _out_dim(task, axis=1)
+    if w_in is None or w_out is None or w_in != w_out:
+        return None
+    if not _all(task, lambda e: _is_tile_rows(e, h, reps)):
+        return None
+    return B.build_tile_rows(h, reps)
+
+
+def solve_tile_cols(task: Task) -> onnx.ModelProto | None:
+    """列方向 reps 回循環タイル（np.tile axis=1）。cost=30。"""
+    reps = _tile_reps(task, axis=1)
+    if reps is None:
+        return None
+    w = _const_dim(task, axis=1)
+    if w is None:
+        return None
+    h_in = _const_dim(task, axis=0)
+    h_out = _out_dim(task, axis=0)
+    if h_in is None or h_out is None or h_in != h_out:
+        return None
+    if not _all(task, lambda e: _is_tile_cols(e, w, reps)):
+        return None
+    return B.build_tile_cols(w, reps)
+
+
+def solve_tile(task: Task) -> onnx.ModelProto | None:
+    """2D 循環タイル（np.tile 両軸）。cost≈36060。"""
+    reps_h = _tile_reps(task, axis=0)
+    reps_w = _tile_reps(task, axis=1)
+    if reps_h is None or reps_w is None:
+        return None
+    h = _const_dim(task, axis=0)
+    w = _const_dim(task, axis=1)
+    if h is None or w is None:
+        return None
+    if not _all(task, lambda e: _is_tile_2d(e, h, w, reps_h, reps_w)):
+        return None
+    return B.build_tile(h, w, reps_h, reps_w)
+
+
 # --- recolor (global color map) ---------------------------------------------
 def _recolor_mapping(task: Task) -> dict[int, int] | None:
     if not _all(task, _same_shape):
@@ -326,6 +411,8 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("flip_h", solve_flip_h),
     ("scale_up_rows", solve_scale_up_rows),
     ("scale_up_cols", solve_scale_up_cols),
+    ("tile_rows", solve_tile_rows),
+    ("tile_cols", solve_tile_cols),
     ("rot180", solve_rot180),
     ("rot90", solve_rot90),
     ("rot270", solve_rot270),
@@ -337,5 +424,6 @@ SOLVERS: list[tuple[str, Solver]] = [
     ("residual5", solve_residual5),
     ("small_lookup", solve_small_lookup),
     ("scale_up_2d", solve_scale_up_2d),
+    ("tile", solve_tile),
     ("floodfill", solve_floodfill),
 ]

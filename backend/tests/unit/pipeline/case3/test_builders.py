@@ -223,6 +223,100 @@ def test_scale_up_2d_preserves_zero_padding() -> None:
     assert np.all(out[0, :, :, 4:] == 0)
 
 
+# ─── tile_rows (axis=2, cyclic row tile) ───────────────────────────────────
+
+
+def test_tile_rows_reps2_2x2() -> None:
+    """2×2 グリッドを行方向 2 回タイル → 4×2（np.tile axis=0）。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_rows(2, 2), g)
+    expected = [[1, 2], [3, 4], [1, 2], [3, 4]]
+    assert _argmax_grid(out, 4, 2) == expected
+
+
+def test_tile_rows_reps3_2x2() -> None:
+    """3 回タイル: 2 行 → 6 行。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_rows(2, 3), g)
+    expected = [[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]]
+    assert _argmax_grid(out, 6, 2) == expected
+
+
+def test_tile_rows_vs_scale_up_rows() -> None:
+    """tile_rows と scale_up_rows の区別: tile は循環、scale は各行繰り返し。"""
+    g = [[1, 2], [3, 4]]
+    tile_out = _run(B.build_tile_rows(2, 2), g)
+    scale_out = _run(B.build_scale_up_rows(2, 2), g)
+    # tile: [1,2],[3,4],[1,2],[3,4]  scale: [1,2],[1,2],[3,4],[3,4]
+    assert _argmax_grid(tile_out, 4, 2) == [[1, 2], [3, 4], [1, 2], [3, 4]]
+    assert _argmax_grid(scale_out, 4, 2) == [[1, 2], [1, 2], [3, 4], [3, 4]]
+
+
+def test_tile_rows_preserves_zero_padding() -> None:
+    """タイル後も content 外の行はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_rows(2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+
+
+# ─── tile_cols (axis=3, cyclic col tile) ───────────────────────────────────
+
+
+def test_tile_cols_reps2_2x2() -> None:
+    """2×2 グリッドを列方向 2 回タイル → 2×4。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_cols(2, 2), g)
+    expected = [[1, 2, 1, 2], [3, 4, 3, 4]]
+    assert _argmax_grid(out, 2, 4) == expected
+
+
+def test_tile_cols_reps3() -> None:
+    """3 回タイル: 2 列 → 6 列。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_cols(2, 3), g)
+    expected = [[1, 2, 1, 2, 1, 2], [3, 4, 3, 4, 3, 4]]
+    assert _argmax_grid(out, 2, 6) == expected
+
+
+def test_tile_cols_preserves_zero_padding() -> None:
+    """タイル後も content 外の列はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile_cols(2, 2), g)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
+# ─── tile (2D, axis=2+3) ───────────────────────────────────────────────────
+
+
+def test_tile_2d_reps2_2x2() -> None:
+    """2×2 グリッドを 2D 2× タイル → 4×4。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    expected = [
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+        [1, 2, 1, 2],
+        [3, 4, 3, 4],
+    ]
+    assert _argmax_grid(out, 4, 4) == expected
+
+
+def test_tile_2d_asymmetric() -> None:
+    """非正方形タイル: 2×3, reps_h=2, reps_w=3 → 4×9。"""
+    g = [[1, 2, 3], [4, 5, 6]]
+    expected = np.tile(np.array(g), (2, 3)).tolist()
+    out = _run(B.build_tile(2, 3, 2, 3), g)
+    assert _argmax_grid(out, 4, 9) == expected
+
+
+def test_tile_2d_preserves_zero_padding() -> None:
+    """2D タイル後も content 外はゼロのまま。"""
+    g = [[1, 2], [3, 4]]
+    out = _run(B.build_tile(2, 2, 2, 2), g)
+    assert np.all(out[0, :, 4:, :] == 0)
+    assert np.all(out[0, :, :, 4:] == 0)
+
+
 # ─── onnx.checker pass ─────────────────────────────────────────────────────
 
 
@@ -238,6 +332,9 @@ def test_scale_up_2d_preserves_zero_padding() -> None:
         B.build_scale_up_rows(3, 2),
         B.build_scale_up_cols(3, 2),
         B.build_scale_up_2d(3, 3, 2),
+        B.build_tile_rows(3, 2),
+        B.build_tile_cols(3, 2),
+        B.build_tile(3, 3, 2, 2),
     ],
 )
 def test_onnx_checker_passes(model: onnx.ModelProto) -> None:
