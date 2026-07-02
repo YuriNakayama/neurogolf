@@ -27,6 +27,9 @@ HARD_RISK_TASKS = {
 }
 
 REVIEW_RISK_TASKS = {
+    2: "task002 bit-topology aliases have prior Public-regression risk",
+    35: "case395 batch-ERROR family member",
+    37: "case395 batch-ERROR family member",
     44: "case475 regressing micro bundle member",
     46: "case475 regressing micro bundle member",
     64: "case475 regressing micro bundle member",
