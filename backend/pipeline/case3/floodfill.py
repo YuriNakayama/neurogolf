@@ -423,6 +423,8 @@ def _detect_border_bicolor(examples: tuple[Example, ...]) -> bool:
             return False
         # BFS 検証: 4 連結 border-reachable → 3, 囲まれ → 2
         free = a == 0
+        if not free.any():
+            return False
         reach = _border_reachable(free)
         expected = a.copy()
         expected[reach] = 3
@@ -537,9 +539,7 @@ def build_border_bicolor_flood(
     )
     inits.append(helper.make_tensor("three_u8", _U8, [], [3]))
     nodes.append(
-        helper.make_node(
-            "Where", ["reach_b", "three_u8", "label_enc"], ["label_fin25"]
-        )
+        helper.make_node("Where", ["reach_b", "three_u8", "label_enc"], ["label_fin25"])
     )
 
     # --- 25×25 → 30×30 (sentinel=10 でパディング) ---
@@ -555,9 +555,7 @@ def build_border_bicolor_flood(
     )
 
     # --- one-hot encode → [1,10,30,30] bool ---
-    inits.append(
-        helper.make_tensor("palette_u8", _U8, [1, 10, 1, 1], list(range(10)))
-    )
+    inits.append(helper.make_tensor("palette_u8", _U8, [1, 10, 1, 1], list(range(10))))
     nodes.append(helper.make_node("Equal", ["label_fin30", "palette_u8"], ["output"]))
 
     x = helper.make_tensor_value_info("input", _DTYPE, GRID_SHAPE)

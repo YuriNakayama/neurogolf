@@ -455,3 +455,41 @@ def test_solve_scale_up_all_in_solvers_list() -> None:
     assert "scale_up_rows" in names
     assert "scale_up_cols" in names
     assert "scale_up_2d" in names
+
+
+# ─── border_bicolor_flood ───────────────────────────────────────────────────
+
+
+def test_solve_border_bicolor_flood_in_solvers_list() -> None:
+    """border_bicolor_flood が SOLVERS リストに含まれる。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "border_bicolor_flood" in names
+
+
+def test_solve_border_bicolor_flood_5x5() -> None:
+    """5×5: 外周→3, 囲まれた内側→2 の 2 色塗り分けを正しく解く。"""
+    inp = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 1, 0, 1, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    out = [
+        [3, 3, 3, 3, 3],
+        [3, 1, 1, 1, 3],
+        [3, 1, 2, 1, 3],
+        [3, 1, 1, 1, 3],
+        [3, 3, 3, 3, 3],
+    ]
+    model = solvers.solve_border_bicolor_flood(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_border_bicolor_flood_not_applicable() -> None:
+    """通常の recolor タスクは border_bicolor_flood に該当しない。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_border_bicolor_flood(_task(g, g)) is None
