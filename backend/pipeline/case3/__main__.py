@@ -34,9 +34,10 @@ def _main() -> None:
 def solve_cmd(
     task_dir: Path = typer.Option(DEFAULT_TASK_DIR, "--task-dir"),
     out: Path = typer.Option(Path("../data/output/onnx/case3"), "--out"),
+    task: list[int] = typer.Option([], "--task", help="対象タスク番号（省略時は全400タスク）"),
 ) -> None:
     """solver bank で各タスク最小 cost の ONNX を生成（厳密検証済みのみ）。"""
-    solved = run(task_dir, out)
+    solved = run(task_dir, out, tasks=task or None)
     write_manifest(solved, out.parent / "case3_manifest.json")
     typer.echo(f"solved {len(solved)} tasks -> {out}")
 
