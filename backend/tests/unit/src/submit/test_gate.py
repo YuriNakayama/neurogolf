@@ -497,3 +497,56 @@ def test_task_num_from_path_rejects_non_task_name(tmp_path: Path) -> None:
 
 def test_task_num_from_path_accepts_descriptive_scratch_name(tmp_path: Path) -> None:
     assert gate.task_num_from_path(tmp_path / "task364_PA7_to_PA6.onnx") == 364
+
+
+def test_scan_candidate_files_continues_after_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline_dir = tmp_path / "baseline"
+    candidate_dir = tmp_path / "candidate"
+    baseline_dir.mkdir()
+    candidate_dir.mkdir()
+    task_dir = _task_json_dir(tmp_path, 1, 3)
+    baseline1 = baseline_dir / "task001.onnx"
+    baseline3 = baseline_dir / "task003.onnx"
+    candidate1 = candidate_dir / "task001.onnx"
+    candidate3 = candidate_dir / "task003.onnx"
+    baseline1.write_bytes(b"old1")
+    baseline3.write_bytes(b"old3")
+    candidate1.write_bytes(b"new1")
+    candidate3.write_bytes(b"new3")
+
+    def fake_gate(
+        _baseline: Path,
+        candidate: Path,
+        _task_json: Path,
+        *,
+        submit_gain: float = 0.020,
+        mid_gain: float = 0.010,
+    ) -> gate.CandidateGate:
+        if candidate == candidate1:
+            raise RuntimeError("bad candidate")
+        return gate.CandidateGate(
+            task=3,
+            baseline_cost=1000,
+            candidate_cost=900,
+            gain=0.1,
+            n_fail=0,
+            status="ok",
+            functions=0,
+            forbidden_ops=(),
+            decision="submit-candidate",
+            reason="ok",
+        )
+
+    monkeypatch.setattr(gate, "evaluate_candidate_gate", fake_gate)
+
+    result = gate.scan_candidate_files(
+        [candidate1, candidate3], baseline_dir, task_dir
+    )
+
+    assert [item.gate.decision for item in result] == [
+        "blocked-exception",
+        "submit-candidate",
+    ]
+    assert result[0].gate.status == "RuntimeError"

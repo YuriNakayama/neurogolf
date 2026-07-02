@@ -23,7 +23,10 @@ HARD_RISK_TASKS = {
     44: "case532 isolated task044 bottom-match alias regressed Public validation",
     101: "task101 local-equivalence aliases have regressed Public validation",
     135: "case541 unscorable-baseline crop replacement regressed Public validation",
-    192: "case544 task192 score-weight repair passed local but regressed Public validation",
+    192: (
+        "case544 task192 score-weight repair passed local but regressed "
+        "Public validation"
+    ),
     286: "broad task286 bitwise-chain equivalence bundle regressed Public validation",
     305: "task305 suffix-row prune was contaminated by a regressing filler bundle",
     366: "task366 broad alias bundle was contaminated by a regressing filler bundle",
@@ -141,6 +144,14 @@ class BundleGate:
         if not decisions <= {"bank-low-gain", "submit-candidate"}:
             return False
         return self.total_gain >= self.micro_bundle_gain
+
+
+@dataclass(frozen=True)
+class CandidateScan:
+    """Result from screening one scratch candidate file."""
+
+    path: Path
+    gate: CandidateGate
 
 
 def task_num_from_path(path: Path) -> int:
@@ -346,3 +357,99 @@ def evaluate_bundle_gate(
         micro_bundle_gain=micro_bundle_gain,
         micro_bundle_max_tasks=micro_bundle_max_tasks,
     )
+
+
+def _blocked_scan_result(
+    candidate: Path,
+    *,
+    decision: str,
+    status: str,
+    reason: str,
+) -> CandidateScan:
+    try:
+        task = task_num_from_path(candidate)
+    except ValueError:
+        task = 0
+    return CandidateScan(
+        path=candidate,
+        gate=CandidateGate(
+            task=task,
+            baseline_cost=None,
+            candidate_cost=None,
+            gain=None,
+            n_fail=0,
+            status=status,
+            functions=0,
+            forbidden_ops=(),
+            decision=decision,
+            reason=reason,
+        ),
+    )
+
+
+def scan_candidate_files(
+    files: list[Path],
+    baseline_dir: Path,
+    task_dir: Path,
+    *,
+    submit_gain: float = 0.020,
+    mid_gain: float = 0.010,
+) -> tuple[CandidateScan, ...]:
+    """Gate scratch candidates independently, converting failures into rows."""
+
+    results: list[CandidateScan] = []
+    for candidate in files:
+        try:
+            task = task_num_from_path(candidate)
+        except ValueError as exc:
+            results.append(
+                _blocked_scan_result(
+                    candidate,
+                    decision="blocked-bad-filename",
+                    status="bad-filename",
+                    reason=str(exc),
+                )
+            )
+            continue
+        baseline = baseline_dir / f"task{task:03d}.onnx"
+        task_json = task_dir / f"task{task:03d}.json"
+        if not baseline.is_file():
+            results.append(
+                _blocked_scan_result(
+                    candidate,
+                    decision="blocked-missing-baseline",
+                    status="missing-baseline",
+                    reason=f"baseline is missing: {baseline}",
+                )
+            )
+            continue
+        if not task_json.is_file():
+            results.append(
+                _blocked_scan_result(
+                    candidate,
+                    decision="blocked-missing-task-json",
+                    status="missing-task-json",
+                    reason=f"task json is missing: {task_json}",
+                )
+            )
+            continue
+        try:
+            gate = evaluate_candidate_gate(
+                baseline,
+                candidate,
+                task_json,
+                submit_gain=submit_gain,
+                mid_gain=mid_gain,
+            )
+        except Exception as exc:
+            results.append(
+                _blocked_scan_result(
+                    candidate,
+                    decision="blocked-exception",
+                    status=type(exc).__name__,
+                    reason=str(exc),
+                )
+            )
+            continue
+        results.append(CandidateScan(path=candidate, gate=gate))
+    return tuple(results)

@@ -25,6 +25,7 @@ from submit.gate import (
     BundleGate,
     evaluate_bundle_gate,
     evaluate_candidate_gate,
+    scan_candidate_files,
     task_num_from_path,
 )
 from submit.kaggle_api import KaggleCLIError
@@ -353,6 +354,94 @@ def gate_cmd(
     console.print(f"forbidden ops : {forbidden}")
     console.print(f"decision      : [bold]{result.decision}[/]")
     console.print(f"reason        : {result.reason}")
+
+
+@app.command("scan-candidates")
+def scan_candidates_cmd(
+    candidates: list[Path] = typer.Argument(
+        ...,
+        help="評価する taskNNN.onnx 候補ファイルまたは候補ディレクトリ",
+    ),
+    baseline_dir: Path = typer.Option(
+        DEFAULT_ONNX_DIR,
+        "--baseline-dir",
+        help="採用済み baseline の taskNNN.onnx ディレクトリ",
+    ),
+    task_dir: Path = typer.Option(
+        Path("../data/lake/neurogolf-2026"),
+        "--task-dir",
+        help="taskNNN.json を収めたディレクトリ",
+    ),
+    submit_gain: float = typer.Option(
+        0.020,
+        "--submit-gain",
+        help="通常 submit 可能とみなす最小 relative gain",
+    ),
+    mid_gain: float = typer.Option(
+        0.010,
+        "--mid-gain",
+        help="要レビュー候補と bank-only 候補の境界",
+    ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        help="先頭 N 件だけを走査する",
+    ),
+) -> None:
+    """候補 ONNX 群を個別 gate し、例外で全体を止めずに一覧表示する。"""
+
+    files: list[Path] = []
+    for candidate in candidates:
+        if candidate.is_dir():
+            files.extend(sorted(candidate.rglob("task*.onnx")))
+        else:
+            files.append(candidate)
+    if limit is not None:
+        files = files[:limit]
+    results = scan_candidate_files(
+        files,
+        baseline_dir,
+        task_dir,
+        submit_gain=submit_gain,
+        mid_gain=mid_gain,
+    )
+    table = Table(title="Candidate scan")
+    table.add_column("task")
+    table.add_column("base", justify="right")
+    table.add_column("cand", justify="right")
+    table.add_column("gain", justify="right")
+    table.add_column("n_fail", justify="right")
+    table.add_column("decision")
+    table.add_column("path")
+    for result in sorted(
+        results,
+        key=lambda item: (
+            item.gate.decision not in {"submit-candidate", "bank-low-gain"},
+            -(item.gate.gain or 0.0),
+            item.gate.n_fail,
+            str(item.path),
+        ),
+    ):
+        gate = result.gate
+        gain = "—" if gate.gain is None else f"{gate.gain:.6f}"
+        table.add_row(
+            "—" if gate.task == 0 else f"task{gate.task:03d}",
+            "—" if gate.baseline_cost is None else f"{gate.baseline_cost}",
+            "—" if gate.candidate_cost is None else f"{gate.candidate_cost}",
+            gain,
+            f"{gate.n_fail}",
+            gate.decision,
+            str(result.path),
+        )
+    console.print(table)
+    positives = [
+        result for result in results if result.gate.decision == "submit-candidate"
+    ]
+    banked = [result for result in results if result.gate.decision == "bank-low-gain"]
+    console.print(
+        f"  scanned: {len(results)}  submit-candidate: {len(positives)}  "
+        f"bank-low-gain: {len(banked)}"
+    )
 
 
 @app.command("submissions")
