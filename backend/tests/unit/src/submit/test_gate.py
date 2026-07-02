@@ -205,6 +205,21 @@ def test_case475_regression_member_requires_review(
     assert result.decision == "review-known-risk"
 
 
+def test_case561_error_member_requires_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_audits(monkeypatch, base_cost=1000, cand_cost=900)
+    _patch_static_model(monkeypatch)
+
+    result = gate.evaluate_candidate_gate(
+        tmp_path / "baseline.onnx",
+        _onnx(tmp_path, "task316_dtype_shrink.onnx"),
+        _task_json(tmp_path),
+    )
+
+    assert result.decision == "review-known-risk"
+
+
 def test_changed_candidate_files_returns_only_byte_differences(tmp_path: Path) -> None:
     baseline_dir = tmp_path / "baseline"
     candidate_dir = tmp_path / "candidate"

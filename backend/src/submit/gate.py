@@ -49,6 +49,7 @@ REVIEW_RISK_TASKS = {
     263: "case514 clean micro-bundle member produced Kaggle ERROR",
     293: "case414 unisolated micro bundle member",
     308: "case414 unisolated micro bundle member",
+    316: "case561 task316 Cast dtype shrink produced Kaggle ERROR",
     338: "standalone micro did not move Public LB",
     342: "standalone micro did not move Public LB",
     370: "case414 unisolated micro bundle member",
