@@ -455,3 +455,99 @@ def test_solve_scale_up_all_in_solvers_list() -> None:
     assert "scale_up_rows" in names
     assert "scale_up_cols" in names
     assert "scale_up_2d" in names
+
+
+# ─── tile_rows ─────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_rows_reps2() -> None:
+    """行方向 2 回タイルを正しく解く（np.tile axis=0）。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2], [3, 4], [1, 2], [3, 4]]
+    model = solvers.solve_tile_rows(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_rows_vs_scale_up_rows() -> None:
+    """scale_up_rows パターン（各行繰り返し）は tile_rows で解けない。"""
+    inp = [[1, 2], [3, 4]]
+    scale_out = [[1, 2], [1, 2], [3, 4], [3, 4]]  # scale_up pattern
+    assert solvers.solve_tile_rows(_task(inp, scale_out)) is None
+
+
+def test_solve_tile_rows_returns_none_for_same_shape() -> None:
+    """同形状は None。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile_rows(_task(g, g)) is None
+
+
+def test_solve_tile_rows_returns_none_for_col_change() -> None:
+    """列数が変わる場合は None。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 3], [3, 4, 5], [1, 2, 3], [3, 4, 5]]
+    assert solvers.solve_tile_rows(_task(inp, out)) is None
+
+
+# ─── tile_cols ─────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_cols_reps2() -> None:
+    """列方向 2 回タイルを正しく解く（np.tile axis=1）。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile_cols(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_cols_vs_scale_up_cols() -> None:
+    """scale_up_cols パターン（各列繰り返し）は tile_cols で解けない。"""
+    inp = [[1, 2], [3, 4]]
+    scale_out = [[1, 1, 2, 2], [3, 3, 4, 4]]  # scale_up pattern
+    assert solvers.solve_tile_cols(_task(inp, scale_out)) is None
+
+
+def test_solve_tile_cols_returns_none_for_same_shape() -> None:
+    """同形状は None。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile_cols(_task(g, g)) is None
+
+
+# ─── tile (2D) ─────────────────────────────────────────────────────────────
+
+
+def test_solve_tile_2d_reps2() -> None:
+    """2D 2× タイルを正しく解く。"""
+    inp = [[1, 2], [3, 4]]
+    out = [[1, 2, 1, 2], [3, 4, 3, 4], [1, 2, 1, 2], [3, 4, 3, 4]]
+    model = solvers.solve_tile(_task(inp, out))
+    assert model is not None
+    res = _run_audit(model, _examples(inp, out))
+    assert res["status"] == "ok"
+    assert res["n_fail"] == 0
+
+
+def test_solve_tile_2d_returns_none_for_same_shape() -> None:
+    """同形状は None。"""
+    g = [[1, 2], [3, 4]]
+    assert solvers.solve_tile(_task(g, g)) is None
+
+
+def test_solve_tile_2d_returns_none_for_scale_up_pattern() -> None:
+    """scale_up_2d パターン（np.repeat）は tile で解けない。"""
+    inp = [[1, 2], [3, 4]]
+    scale_out = [[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+    assert solvers.solve_tile(_task(inp, scale_out)) is None
+
+
+def test_solve_tile_all_in_solvers_list() -> None:
+    """3 つのタイルソルバが SOLVERS リストに含まれる。"""
+    names = [name for name, _ in solvers.SOLVERS]
+    assert "tile_rows" in names
+    assert "tile_cols" in names
+    assert "tile" in names

@@ -181,3 +181,60 @@ def build_scale_up_2d(h: int, w: int, k: int) -> onnx.ModelProto:
         "Gather", ["scale_mid", "scale_col_idx"], ["output"], axis=3
     )
     return _model([g_rows, g_cols], [row_init, col_init])
+
+
+def _tile_idx(dim_in: int, reps: int) -> list[int]:
+    """np.tile の循環インデックスマップ（30 要素）。
+
+    content 位置 [0..reps*dim_in) は ``i % dim_in`` で循環し、
+    残り [reps*dim_in..29] はゼロパディング行/列へ写す。
+    reps * dim_in <= GRID_MAX を前提とする。
+    """
+    tiled = [i % dim_in for i in range(reps * dim_in)]
+    padding = list(range(dim_in, dim_in + (GRID_MAX - reps * dim_in)))
+    return tiled + padding
+
+
+def build_tile_rows(h: int, reps: int) -> onnx.ModelProto:
+    """行方向 reps 回循環タイル（np.tile axis=0）。params=30, memory=0。
+
+    Gather(axis=2) 1 本で input → output へ直結。reps * h <= GRID_MAX を前提とする。
+    """
+    row_idx = _tile_idx(h, reps)
+    init = helper.make_tensor("tile_row_idx", TensorProto.INT64, [GRID_MAX], row_idx)
+    node = helper.make_node("Gather", ["input", "tile_row_idx"], ["output"], axis=2)
+    return _model([node], [init])
+
+
+def build_tile_cols(w: int, reps: int) -> onnx.ModelProto:
+    """列方向 reps 回循環タイル（np.tile axis=1）。params=30, memory=0。
+
+    Gather(axis=3) 1 本で input → output へ直結。reps * w <= GRID_MAX を前提とする。
+    """
+    col_idx = _tile_idx(w, reps)
+    init = helper.make_tensor("tile_col_idx", TensorProto.INT64, [GRID_MAX], col_idx)
+    node = helper.make_node("Gather", ["input", "tile_col_idx"], ["output"], axis=3)
+    return _model([node], [init])
+
+
+def build_tile(h: int, w: int, reps_h: int, reps_w: int) -> onnx.ModelProto:
+    """2D 循環タイル（np.tile）。params=60, memory=36000。
+
+    Gather(axis=2) で行を展開した中間テンソルに続き Gather(axis=3) で列を展開する。
+    reps_h * h <= GRID_MAX かつ reps_w * w <= GRID_MAX を前提とする。
+    """
+    row_idx = _tile_idx(h, reps_h)
+    col_idx = _tile_idx(w, reps_w)
+    row_init = helper.make_tensor(
+        "tile_row_idx", TensorProto.INT64, [GRID_MAX], row_idx
+    )
+    col_init = helper.make_tensor(
+        "tile_col_idx", TensorProto.INT64, [GRID_MAX], col_idx
+    )
+    g_rows = helper.make_node(
+        "Gather", ["input", "tile_row_idx"], ["tile_mid"], axis=2
+    )
+    g_cols = helper.make_node(
+        "Gather", ["tile_mid", "tile_col_idx"], ["output"], axis=3
+    )
+    return _model([g_rows, g_cols], [row_init, col_init])
