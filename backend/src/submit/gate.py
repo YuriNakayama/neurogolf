@@ -1,0 +1,137 @@
+"""Pre-submit gate for one-task NeuroGolf candidate ONNX files."""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import onnx
+
+from evaluate import audit_one
+
+TASK_RE = re.compile(r"task(\d{3})")
+
+
+@dataclass(frozen=True)
+class CandidateGate:
+    """Decision for one candidate compared with the accepted baseline."""
+
+    task: int
+    baseline_cost: int | None
+    candidate_cost: int | None
+    gain: float | None
+    n_fail: int
+    status: str
+    functions: int
+    forbidden_ops: tuple[str, ...]
+    decision: str
+    reason: str
+
+
+def task_num_from_path(path: Path) -> int:
+    """Extract the task number from a `taskNNN.onnx` path."""
+
+    match = TASK_RE.search(path.name)
+    if match is None:
+        raise ValueError(f"ファイル名に taskNNN が含まれていません: {path.name}")
+    return int(match.group(1))
+
+
+def _audit_clean(path: Path, examples: dict[str, Any]) -> dict[str, Any]:
+    """Run audit_one while containing profiler output in a temporary directory."""
+
+    resolved = path.resolve()
+    with tempfile.TemporaryDirectory() as tmp:
+        cwd = Path.cwd()
+        try:
+            os.chdir(tmp)
+            return audit_one(str(resolved), examples, run_correctness=True)
+        finally:
+            os.chdir(cwd)
+
+
+def _functions_and_forbidden(path: Path) -> tuple[int, tuple[str, ...]]:
+    model = onnx.load(str(path))
+    forbidden = {
+        "Loop",
+        "Scan",
+        "NonZero",
+        "Unique",
+        "Script",
+        "Function",
+        "Compress",
+    }
+    found = sorted({node.op_type for node in model.graph.node} & forbidden)
+    return len(model.functions), tuple(found)
+
+
+def evaluate_candidate_gate(
+    baseline: Path,
+    candidate: Path,
+    task_json: Path,
+    *,
+    submit_gain: float = 0.020,
+    mid_gain: float = 0.010,
+) -> CandidateGate:
+    """Compare a candidate against baseline and classify submit readiness."""
+
+    task = task_num_from_path(candidate)
+    examples = json.loads(task_json.read_text())
+    base = _audit_clean(baseline, examples)
+    cand = _audit_clean(candidate, examples)
+    functions, forbidden_ops = _functions_and_forbidden(candidate)
+
+    baseline_cost = base["cost"]
+    candidate_cost = cand["cost"]
+    status = str(cand["status"])
+    n_fail = int(cand["n_fail"])
+    gain = None
+    if baseline_cost is not None and candidate_cost is not None and candidate_cost > 0:
+        gain = math.log(int(baseline_cost) / int(candidate_cost))
+
+    if base["status"] != "ok" or base["cost"] is None:
+        decision = "blocked-baseline"
+        reason = f"baseline audit failed: {base['status']}"
+    elif status != "ok" or n_fail != 0:
+        decision = "blocked-local-fail"
+        reason = f"candidate local audit failed: status={status} n_fail={n_fail}"
+    elif functions:
+        decision = "blocked-functions"
+        reason = f"candidate contains {functions} ONNX functions"
+    elif forbidden_ops:
+        decision = "blocked-forbidden-op"
+        reason = "candidate contains forbidden ops: " + ", ".join(forbidden_ops)
+    elif candidate_cost is None or gain is None:
+        decision = "blocked-unscorable"
+        reason = "candidate cost could not be estimated"
+    elif int(candidate_cost) >= int(baseline_cost):
+        decision = "blocked-no-gain"
+        reason = f"candidate does not reduce cost: {baseline_cost}->{candidate_cost}"
+    elif gain >= submit_gain:
+        decision = "submit-candidate"
+        reason = f"gain {gain:.6f} >= submit threshold {submit_gain:.6f}"
+    elif gain >= mid_gain:
+        decision = "review-mid-gain"
+        reason = f"gain {gain:.6f} requires prior Kaggle-valid evidence"
+    else:
+        decision = "bank-low-gain"
+        reason = f"gain {gain:.6f} is below bank threshold {mid_gain:.6f}"
+
+    return CandidateGate(
+        task=task,
+        baseline_cost=int(baseline_cost) if baseline_cost is not None else None,
+        candidate_cost=int(candidate_cost) if candidate_cost is not None else None,
+        gain=gain,
+        n_fail=n_fail,
+        status=status,
+        functions=functions,
+        forbidden_ops=forbidden_ops,
+        decision=decision,
+        reason=reason,
+    )

@@ -21,6 +21,7 @@ from submit import (
     record,
     validate_onnx_files,
 )
+from submit.gate import evaluate_candidate_gate, task_num_from_path
 from submit.kaggle_api import KaggleCLIError
 from submit.validator import TaskValidation
 
@@ -191,6 +192,71 @@ def validate_cmd(
     if unscorable:
         line += f"  (うち {unscorable} 件は local 未推定)"
     console.print(line)
+
+
+@app.command("gate")
+def gate_cmd(
+    candidate: Path = typer.Argument(..., help="評価する taskNNN.onnx 候補"),
+    baseline_dir: Path = typer.Option(
+        DEFAULT_ONNX_DIR,
+        "--baseline-dir",
+        help="採用済み baseline の taskNNN.onnx ディレクトリ",
+    ),
+    task_dir: Path = typer.Option(
+        Path("../data/lake/neurogolf-2026"),
+        "--task-dir",
+        help="taskNNN.json を収めたディレクトリ",
+    ),
+    submit_gain: float = typer.Option(
+        0.020,
+        "--submit-gain",
+        help="通常 submit 可能とみなす最小 relative gain",
+    ),
+    mid_gain: float = typer.Option(
+        0.010,
+        "--mid-gain",
+        help="要レビュー候補と bank-only 候補の境界",
+    ),
+) -> None:
+    """候補 ONNX 1 件を baseline と比較し、submit 前ゲートを表示する。"""
+
+    try:
+        task = task_num_from_path(candidate)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=2) from exc
+    task_name = f"task{task:03d}"
+    baseline = baseline_dir / f"{task_name}.onnx"
+    task_json = task_dir / f"{task_name}.json"
+    if not baseline.is_file():
+        console.print(f"[red]baseline が見つかりません:[/] {baseline}")
+        raise typer.Exit(code=2)
+    if not candidate.is_file():
+        console.print(f"[red]candidate が見つかりません:[/] {candidate}")
+        raise typer.Exit(code=2)
+    if not task_json.is_file():
+        console.print(f"[red]task json が見つかりません:[/] {task_json}")
+        raise typer.Exit(code=2)
+
+    result = evaluate_candidate_gate(
+        baseline,
+        candidate,
+        task_json,
+        submit_gain=submit_gain,
+        mid_gain=mid_gain,
+    )
+    gain = "—" if result.gain is None else f"{result.gain:.6f}"
+    forbidden = ", ".join(result.forbidden_ops) if result.forbidden_ops else "[]"
+    console.print(f"task          : {result.task:03d}")
+    console.print(f"baseline cost : {result.baseline_cost}")
+    console.print(f"candidate cost: {result.candidate_cost}")
+    console.print(f"gain          : {gain}")
+    console.print(f"status        : {result.status}")
+    console.print(f"n_fail        : {result.n_fail}")
+    console.print(f"functions     : {result.functions}")
+    console.print(f"forbidden ops : {forbidden}")
+    console.print(f"decision      : [bold]{result.decision}[/]")
+    console.print(f"reason        : {result.reason}")
 
 
 @app.command("submissions")
